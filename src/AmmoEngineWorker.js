@@ -139,7 +139,45 @@ function _createShape(buffer, offset) {
                 shape = new Ammo.btCapsuleShape(buffer[offset++], buffer[offset++]);
                 break;
             case SHAPE_CONVEX_TRIANGLE_MESH:
-                //TODO
+            case SHAPE_BVH_TRIANGLE_MESH:
+                var nTriangles = buffer[offset++];
+                var nVertices = buffer[offset++];
+                var indexStride = 3 * 4;
+                var vertexStride = 3 * 4;
+                
+                var triangleIndices = buffer.subarray(offset, offset + nTriangles * 3);
+                offset += nTriangles * 3;
+                var indicesPtr = Ammo.allocate(indexStride * nTriangles, 'i32', Ammo.ALLOC_NORMAL);
+                for (var i = 0; i < triangleIndices.length; i++) {
+                    Ammo.setValue(indicesPtr + i * 4, triangleIndices[i], 'i32');
+                }
+
+                var vertices = buffer.subarray(offset, offset + nVertices * 3);
+                offset += nVertices * 3;
+                var verticesPtr = Ammo.allocate(vertexStride * nVertices, 'float', Ammo.ALLOC_NORMAL);
+                for (var i = 0; i < vertices.length; i++) {
+                    Ammo.setValue(verticesPtr + i * 4, vertices[i], 'float');
+                }
+
+                var indexVertexArray = new Ammo.btTriangleIndexVertexArray(nTriangles, indicesPtr, indexStride, nVertices, verticesPtr, vertexStride);
+                // TODO Cal AABB ?
+                if (shapeType === SHAPE_CONVEX_TRIANGLE_MESH) {
+                    shape = new Ammo.btConvexTriangleMeshShape(indexVertexArray, true);
+                } else {
+                    shape = new Ammo.btBvhTriangleMeshShape(indexVertexArray, true, true);
+                }
+                break;
+            case SHAPE_CONVEX_HULL:
+                var nPoints = buffer[offset++];
+                var stride = 3 * 4;
+                var points = buffer.subarray(offset, offset + nPoints * 3);
+                offset += nPoints * 3;
+                var pointsPtr = Ammo.allocate(stride * nPoints, 'float', Ammo.ALLOC_NORMAL);
+                for (var i = 0; i < points.length; i++) {
+                    Ammo.setValue(pointsPtr + i * 4, points[i], 'float');
+                }
+
+                shape = new btConvexHullShape(pointsPtr, nPoints, stride);
                 break;
             case SHAPE_STATIC_PLANE:
                 var normal = _unPackVector3(buffer, offset);
@@ -147,7 +185,7 @@ function _createShape(buffer, offset) {
                 shape = new Ammo.btStaticPlaneShape(normal, buffer[offset++]);
                 break;
             default:
-                throw new Error('Unknown type' + shapeType);
+                throw new Error('Unknown type ' + shapeType);
                 break;
         }
 
@@ -172,15 +210,7 @@ function _createShape(buffer, offset) {
 function cmd_AddRigidBody(buffer, offset) {
     var idx = buffer[offset++];
     var bitMask = buffer[offset++];
-    // position(3)
-    // rotation(4)
-    // linearVelocity(3)
-    // angularVelocity(3)
-    // linearFactor(3)
-    // angularFactor(3)
-    // centerOfMass(3)
-    // inertia(3)
-    // mass(1)
+
     var collisionFlags = buffer[offset++];
 
     if (MOTION_STATE_MOD_BIT & bitMask) {
@@ -322,11 +352,18 @@ function cmd_ModRigidBody(buffer, offset) {
 
 function cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {
 
+    var startTime = new Date().getTime();
     g_world.stepSimulation(timeStep, maxSubSteps, fixedTimeStep);
-    g_buffer.offset = 0;
-    g_buffer.packScalar(CMD_SYNC_MOTION_STATE);
+    var stepTime = new Date().getTime() - startTime;
 
+    var nChunk = 2;
+    g_buffer.offset = 0;
+    g_buffer.packScalar(nChunk);
+
+    // Sync Motion State
+    g_buffer.packScalar(CMD_SYNC_MOTION_STATE);
     var nObjects = 0;
+    var nObjectsOffset = g_buffer.offset;
     g_buffer.packScalar(nObjects);
 
     for (var i = 0; i < g_objectsList.length; i++) {
@@ -347,7 +384,12 @@ function cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {
         g_buffer.packVector4(obj.transform.getRotation());
         nObjects++;
     }
-    g_buffer.array[1] = nObjects;
+    g_buffer.array[nObjectsOffset] = nObjects;
+
+    // Return step time
+    g_buffer.packScalar(CMD_STEP_TIME);
+    g_buffer.packScalar(stepTime);
+
     var array = g_buffer.toFloat32Array();
     postMessage(array.buffer, [array.buffer]);
 }

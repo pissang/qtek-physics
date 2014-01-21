@@ -12,7 +12,12 @@ define(function(require) {
     var SphereShape = require('./SphereShape');
     var StaticPlaneShape = require('./StaticPlaneShape');
     var ConvexTriangleMeshShape = require('./ConvexTriangleMeshShape');
+    var BvhTriangleMeshShape = require('./BvhTriangleMeshShape');
+    var ConvexHullShape = require('./ConvexHullShape');
     var QBuffer  = require('./Buffer');
+
+    var StaticGeometry = require('qtek/StaticGeometry');
+    var DynamicGeometry = require('qtek/DynamicGeometry');
 
     var ConfigCtor = new Function(configStr);
 
@@ -20,7 +25,9 @@ define(function(require) {
 
     var Engine = Base.derive({
 
-        workerUrl : ''
+        workerUrl : '',
+
+        _stepTime : 0
 
     }, function () {
         this.init();
@@ -40,14 +47,22 @@ define(function(require) {
 
             this._engineWorker.onmessage = function(e) {
                 var buffer = new Float32Array(e.data);
-    
-                var cmdType = buffer[0];
+        
+                var nChunk = buffer[0];
+                var offset = 1;
+                for (var i = 0; i < nChunk; i++) {
+                    var cmdType = buffer[offset++];
 
-                switch(cmdType) {
-                    case config.CMD_SYNC_MOTION_STATE:
-                        self._syncMotionState(buffer, 1);
-                        break;
-                    default:
+                    switch(cmdType) {
+                        case config.CMD_SYNC_MOTION_STATE:
+                            offset = self._syncMotionState(buffer, offset);
+                            break;
+                        case config.CMD_STEP_TIME:
+                            self._stepTime = buffer[offset++];
+                            // console.log(self._stepTime);
+                            break;
+                        default:
+                    }
                 }
             }
         },
@@ -257,13 +272,44 @@ define(function(require) {
                 this._cmdBuffer.packScalar(config.SHAPE_CAPSULE);
                 this._cmdBuffer.packScalar(shape._radius);
                 this._cmdBuffer.packScalar(shape._height);
-            } else if (shape instanceof ConvexTriangleMeshShape) {
-                shapeType = config.SHAPE_CONVEX_TRIANGLE_MESH;
-                // TODO
             } else if (shape instanceof StaticPlaneShape) {
                 this._cmdBuffer.packScalar(config.SHAPE_STATIC_PLANE);
                 this._cmdBuffer.packVector3(shape.plane.normal);
                 this._cmdBuffer.packScalar(shape.plane.distance);
+            } else if ((shape instanceof ConvexTriangleMeshShape) || (shape instanceof BvhTriangleMeshShape)) {
+                if (shape instanceof ConvexTriangleMeshShape) {
+                    this._cmdBuffer.packScalar(config.SHAPE_CONVEX_TRIANGLE_MESH);
+                } else {
+                    this._cmdBuffer.packScalar(config.SHAPE_BVH_TRIANGLE_MESH);
+                }
+
+                var geo = shape.geometry;
+                // nTriangles - nVertices - indices - vertices 
+                this._cmdBuffer.packScalar(geo.getFaceNumber());
+                this._cmdBuffer.packScalar(geo.getVertexNumber());
+                if (geo instanceof StaticGeometry) {
+                    this._cmdBuffer.packArray(geo.faces);
+                    this._cmdBuffer.packArray(geo.attributes.position.value);
+                } else {
+                    for (var i = 0; i < geo.faces.length; i++) {
+                        this._cmdBuffer.packArray(geo.faces[i]);
+                    }
+                    for (var i = 0; i < geo.attributes.position.value.length; i++) {
+                        this._cmdBuffer.packArray(geo.attributes.position.value[i]);
+                    }
+                }
+            } else if (shape instanceof ConvexHullShape) {
+                this._cmdBuffer.packScalar(config.SHAPE_CONVEX_HULL);
+                var geo = shape.geometry;
+                // nPoints - points
+                this._cmdBuffer.packScalar(geo.getVertexNumber());
+                if (geo instanceof StaticGeometry) {
+                    this._cmdBuffer.packArray(geo.attributes.position.value);
+                } else {
+                    for (var i = 0; i < geo.attributes.position.value.length; i++) {
+                        this._cmdBuffer.packArray(geo.attributes.position.value[i]);
+                    }
+                }
             } else {
                 shapeType = -1;
             }
@@ -290,6 +336,8 @@ define(function(require) {
                     node.rotation.set(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);
                 }
             }
+
+            return offset;
         }
     });
 

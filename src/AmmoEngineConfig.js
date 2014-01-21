@@ -36,6 +36,7 @@ this.CMD_ADD_RIGIDBODY = 0;
 this.CMD_REMOVE_RIGIDBODY = 1;
 this.CMD_MOD_RIGIDBODY = 2;
 this.CMD_SYNC_MOTION_STATE = 3;
+this.CMD_STEP_TIME = 4;
 
 // Message of step
 this.CMD_STEP = 10;
@@ -47,7 +48,9 @@ this.SHAPE_CYLINDER = 2;
 this.SHAPE_CONE = 3;
 this.SHAPE_CAPSULE = 4;
 this.SHAPE_CONVEX_TRIANGLE_MESH = 5;
-this.SHAPE_STATIC_PLANE = 6;
+this.SHAPE_CONVEX_HULL = 6;
+this.SHAPE_STATIC_PLANE = 7;
+this.SHAPE_BVH_TRIANGLE_MESH = 8;
 
 // Rigid Body properties and bit mask
 // 1. Property name
