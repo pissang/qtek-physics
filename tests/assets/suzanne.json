@@ -1,0 +1,205 @@
+{
+    "accessors": {
+        "attribute_18": {
+            "bufferView": "bufferView_22",
+            "byteOffset": 0,
+            "byteStride": 12,
+            "count": 507,
+            "max": [
+                1.36719,
+                0.984375,
+                0.851562
+            ],
+            "min": [
+                -1.36719,
+                -0.984375,
+                -0.851562
+            ],
+            "type": 35665
+        },
+        "attribute_20": {
+            "bufferView": "bufferView_22",
+            "byteOffset": 6084,
+            "byteStride": 12,
+            "count": 507,
+            "max": [
+                0.998932,
+                0.999725,
+                0.999969
+            ],
+            "min": [
+                -0.998932,
+                -0.986267,
+                -0.975311
+            ],
+            "type": 35665
+        },
+        "indices_16": {
+            "bufferView": "bufferView_23",
+            "byteOffset": 0,
+            "count": 2904,
+            "type": 5123
+        }
+    },
+    "animations": {},
+    "asset": {
+        "extras": {
+            "premultipliedAlpha": true
+        },
+        "generator": "collada2gltf@23e7a5e5ab5dfbbd0c0b5b4615c3611a3e5a57ef"
+    },
+    "bufferViews": {
+        "bufferView_22": {
+            "buffer": "suzanne",
+            "byteLength": 12168,
+            "byteOffset": 0,
+            "target": 34962
+        },
+        "bufferView_23": {
+            "buffer": "suzanne",
+            "byteLength": 5808,
+            "byteOffset": 12168,
+            "target": 34963
+        },
+        "bufferView_24": {
+            "buffer": "suzanne",
+            "byteLength": 0,
+            "byteOffset": 17976
+        }
+    },
+    "buffers": {
+        "suzanne": {
+            "byteLength": 17976,
+            "path": "suzanne.bin",
+            "type": "arraybuffer"
+        }
+    },
+    "cameras": {
+        "camera_0": {
+            "perspective": {
+                "aspect_ratio": 1.77778,
+                "xfov": 49.1343,
+                "zfar": 100,
+                "znear": 0.1
+            },
+            "type": "perspective"
+        }
+    },
+    "lights": {
+        "Lamp-light": {
+            "point": {
+                "color": [
+                    1,
+                    1,
+                    1
+                ],
+                "constantAttenuation": 1,
+                "linearAttenuation": 0,
+                "quadraticAttenuation": 0.00111109
+            },
+            "type": "point"
+        }
+    },
+    "materials": {},
+    "meshes": {
+        "Suzanne-mesh": {
+            "name": "Suzanne",
+            "primitives": [
+                {
+                    "attributes": {
+                        "NORMAL": "attribute_20",
+                        "POSITION": "attribute_18"
+                    },
+                    "indices": "indices_16",
+                    "material": "",
+                    "primitive": 4
+                }
+            ]
+        }
+    },
+    "nodes": {
+        "Camera": {
+            "camera": "camera_0",
+            "children": [],
+            "matrix": [
+                0.68588,
+                0.727634,
+                -0.0108168,
+                0,
+                -0.31737,
+                0.312469,
+                0.895343,
+                0,
+                0.654862,
+                -0.610666,
+                0.445245,
+                0,
+                7.48113,
+                -6.50764,
+                5.34367,
+                1
+            ],
+            "name": "Camera"
+        },
+        "Lamp": {
+            "children": [],
+            "light": "Lamp-light",
+            "matrix": [
+                -0.290865,
+                0.955171,
+                -0.0551891,
+                0,
+                -0.771101,
+                -0.199883,
+                0.604525,
+                0,
+                0.566393,
+                0.218391,
+                0.794672,
+                0,
+                4.07624,
+                1.00545,
+                5.90386,
+                1
+            ],
+            "name": "Lamp"
+        },
+        "Suzanne": {
+            "children": [],
+            "matrix": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                -4.37114e-08,
+                1,
+                0,
+                0,
+                -1,
+                -4.37114e-08,
+                0,
+                0,
+                0,
+                0,
+                1
+            ],
+            "meshes": [
+                "Suzanne-mesh"
+            ],
+            "name": "Suzanne"
+        }
+    },
+    "profile": "WebGL 1.0.2",
+    "scene": "defaultScene",
+    "scenes": {
+        "defaultScene": {
+            "nodes": [
+                "Camera",
+                "Lamp",
+                "Suzanne"
+            ]
+        }
+    },
+    "skins": {}
+}

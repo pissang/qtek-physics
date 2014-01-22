@@ -55,7 +55,7 @@ define(function(require) {
         shape : new StaticPlaneShape()
     });
     engine.addCollider(new Collider({
-        rigidBody : floorBody,
+        collisionObject : floorBody,
         material : new PhysicsMaterial(),
         node : planeMesh,
         isStatic : true
@@ -66,16 +66,17 @@ define(function(require) {
                   Cube
      ****************************/
     var cubeGeo = new qtek.geometry.Cube();
+    var material = new qtek.Material({
+        shader : qtek.shader.library.get('buildin.physical')
+    });
+    material.set('color', [Math.random(), Math.random(), Math.random()]);
     for (var i = 0; i < 50; i++) {
         
         var cubeMesh = new qtek.Mesh({
             geometry : cubeGeo,
-            material : new qtek.Material({
-                shader : qtek.shader.library.get('buildin.physical')
-            }),
+            material : material,
             position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
         });
-        cubeMesh.material.set('color', [Math.random(), Math.random(), Math.random()]);
         scene.add(cubeMesh);
 
         var cubeBody = new RigidBody({
@@ -86,7 +87,7 @@ define(function(require) {
         });
 
         engine.addCollider(new Collider({
-            rigidBody : cubeBody,
+            collisionObject : cubeBody,
             material : new PhysicsMaterial(),
             node : cubeMesh
         }));
@@ -100,16 +101,17 @@ define(function(require) {
         widthSegments : 50,
         heightSegments : 50
     });
+    material = new qtek.Material({
+        shader : qtek.shader.library.get('buildin.physical')
+    });
+    material.set('color', [Math.random(), Math.random(), Math.random()]);
     for (var i = 0; i < 50; i++) {
         
         var sphereMesh = new qtek.Mesh({
             geometry : sphereGeo,
-            material : new qtek.Material({
-                shader : qtek.shader.library.get('buildin.physical')
-            }),
+            material : material,
             position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
         });
-        sphereMesh.material.set('color', [Math.random(), Math.random(), Math.random()]);
         scene.add(sphereMesh);
 
         var sphereBody = new RigidBody({
@@ -120,7 +122,7 @@ define(function(require) {
         });
 
         engine.addCollider(new Collider({
-            rigidBody : sphereBody,
+            collisionObject : sphereBody,
             material : new PhysicsMaterial({
                 friction : 0.9
             }),
@@ -136,16 +138,17 @@ define(function(require) {
         heightSegments : 10,
         capSegments : 40
     });
+    material = new qtek.Material({
+        shader : qtek.shader.library.get('buildin.physical')
+    });
+    material.set('color', [Math.random(), Math.random(), Math.random()]);
     for (var i = 0; i < 50; i++) {
         
         var cylinderMesh = new qtek.Mesh({
             geometry : cylinderGeo,
-            material : new qtek.Material({
-                shader : qtek.shader.library.get('buildin.physical')
-            }),
+            material : material,
             position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
         });
-        cylinderMesh.material.set('color', [Math.random(), Math.random(), Math.random()]);
         scene.add(cylinderMesh);
 
         var cylinderBody = new RigidBody({
@@ -154,7 +157,7 @@ define(function(require) {
         });
 
         engine.addCollider(new Collider({
-            rigidBody : cylinderBody,
+            collisionObject : cylinderBody,
             material : new PhysicsMaterial({
                 friction : 0.9
             }),
@@ -169,17 +172,17 @@ define(function(require) {
         widthSegments : 4,
         heightSegments : 4
     });
-
+    material = new qtek.Material({
+        shader : qtek.shader.library.get('buildin.physical')
+    });
+    material.set('color', [Math.random(), Math.random(), Math.random()]);
     for (var i = 0; i < 50; i++) {
         
         var convexMesh = new qtek.Mesh({
             geometry : convexGeo,
-            material : new qtek.Material({
-                shader : qtek.shader.library.get('buildin.physical')
-            }),
+            material : material,
             position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
         });
-        convexMesh.material.set('color', [Math.random(), Math.random(), Math.random()]);
         scene.add(convexMesh);
 
         var convexBody = new RigidBody({
@@ -190,7 +193,7 @@ define(function(require) {
         });
 
         engine.addCollider(new Collider({
-            rigidBody : convexBody,
+            collisionObject : convexBody,
             material : new PhysicsMaterial({
                 friction : 0.9
             }),
@@ -200,38 +203,47 @@ define(function(require) {
 
     /****************************
                 Convex Hull
+                Suzanne Monkey
      ****************************/
-    var convexHullGeo = new qtek.geometry.Cone({
-        capSegments : 5
-    });
+    var loader = new qtek.loader.GLTF();
+    loader.load('assets/suzanne.json');
+    loader.success(function(res) {
+        var _scene = res.scene;
+        var geo = _scene.getNode('Suzanne').geometry;
+        var scaleMat = new qtek.math.Matrix4();
+        scaleMat.scale(new qtek.math.Vector3(3, 3, 3));
+        geo.applyTransform(scaleMat);
 
-    for (var i = 0; i < 50; i++) {
-        
-        var convexHullMesh = new qtek.Mesh({
-            geometry : convexHullGeo,
+        var mesh = new qtek.Mesh({
+            geometry : geo,
             material : new qtek.Material({
                 shader : qtek.shader.library.get('buildin.physical')
-            }),
-            position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
+            })
         });
-        convexHullMesh.material.set('color', [Math.random(), Math.random(), Math.random()]);
-        scene.add(convexHullMesh);
+        mesh.position.y = 20;
+        mesh.material.set('glossiness', 0.7);
 
-        var convexBody = new RigidBody({
+        var body = new RigidBody({
             shape : new ConvexHullShape({
-                geometry : convexHullGeo
+                geometry : geo
             }),
             mass : 1
         });
 
-        engine.addCollider(new Collider({
-            rigidBody : convexBody,
+        var collider = new Collider({
+            collisionObject : body,
             material : new PhysicsMaterial({
                 friction : 0.9
             }),
-            node : convexHullMesh
-        }));
-    }
+            node : mesh
+        });
+        engine.addCollider(collider);
+
+        collider.on('collision', function(contacts){
+            // console.log(contacts.length);
+        });
+        scene.add(mesh);
+    });
 
     /****************************
             BVH Mesh
@@ -263,7 +275,7 @@ define(function(require) {
         });
 
         engine.addCollider(new Collider({
-            rigidBody : body,
+            collisionObject : body,
             material : new PhysicsMaterial({
                 friction : 0.9
             }),

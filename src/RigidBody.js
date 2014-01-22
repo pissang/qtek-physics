@@ -8,8 +8,6 @@ define(function(require) {
 
     var RigidBody = Base.derive({
 
-        // Shape description
-        // Different physics engine can have different config properties
         shape : null,
         
         // Fixed object if mass is 0

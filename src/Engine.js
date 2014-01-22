@@ -15,9 +15,12 @@ define(function(require) {
     var BvhTriangleMeshShape = require('./BvhTriangleMeshShape');
     var ConvexHullShape = require('./ConvexHullShape');
     var QBuffer  = require('./Buffer');
+    var ContactPoint = require('./ContactPoint');
 
     var StaticGeometry = require('qtek/StaticGeometry');
     var DynamicGeometry = require('qtek/DynamicGeometry');
+
+    var Vector3 = require('qtek/math/Vector3');
 
     var ConfigCtor = new Function(configStr);
 
@@ -41,6 +44,8 @@ define(function(require) {
             this._collidersToAdd = [];
             this._collidersToRemove = [];
 
+            this._contacts = [];
+
             this._cmdBuffer = new QBuffer();
 
             var self = this;
@@ -60,6 +65,9 @@ define(function(require) {
                         case config.CMD_STEP_TIME:
                             self._stepTime = buffer[offset++];
                             // console.log(self._stepTime);
+                            break;
+                        case config.CMD_COLLISION_CALLBACK:
+                            offset = self._dispatchCollisionCallback(buffer, offset);
                             break;
                         default:
                     }
@@ -115,7 +123,7 @@ define(function(require) {
                 // Head
                 // CMD type
                 // id
-                this._cmdBuffer.packValues(config.CMD_ADD_RIGIDBODY, idx);
+                this._cmdBuffer.packValues(config.CMD_ADD_COLLIDER, idx);
 
                 var bitMaskOffset = this._cmdBuffer._offset++;
                 var bitMask = this._packCollider(collider, true);
@@ -138,7 +146,7 @@ define(function(require) {
                 // Header
                 // CMD type
                 // Id
-                this._cmdBuffer.packValues(config.CMD_REMOVE_RIGIDBODY, idx);
+                this._cmdBuffer.packValues(config.CMD_REMOVE_COLLIDER, idx);
                 nChunk++;
             }
             this._collidersToRemove.length = 0;
@@ -160,7 +168,7 @@ define(function(require) {
                     // CMD type
                     // id
                     // Mask bit
-                    this._cmdBuffer.packValues(config.CMD_MOD_RIGIDBODY, i, modBit);
+                    this._cmdBuffer.packValues(config.CMD_MOD_COLLIDER, i, modBit);
 
                     nChunk++;
                 }
@@ -174,11 +182,17 @@ define(function(require) {
             if (isCreate || collider._dirty) {
                 // Collision Flags
                 var collisionFlags = 0x0;
-                if (collider._isStatic) {
+                if (collider.isStatic) {
                     collisionFlags |= config.COLLISION_FLAG_STATIC;
                 }
-                if (collider._isKinematic) {
+                if (collider.isKinematic) {
                     collisionFlags |= config.COLLISION_FLAG_KINEMATIC;
+                }
+                if (collider.isGhostObject) {
+                    collisionFlags |= config.COLLISION_FLAG_GHOST_OBJECT;
+                }
+                if (collider._collisionHasCallback) {
+                    collisionFlags |= config.COLLISION_FLAG_HAS_CALLBACK;
                 }
                 this._cmdBuffer.packScalar(collisionFlags);
 
@@ -187,61 +201,68 @@ define(function(require) {
                 collider._dirty = false;
             }
 
-            // Motion State
-            if (isCreate || collider._isKinematic) {
+            //  Motion State 
+            if (isCreate || collider.isKinematic) {
                 this._cmdBuffer.packVector3(collider.node.position);
                 this._cmdBuffer.packVector4(collider.node.rotation);
                 modBit |= config.MOTION_STATE_MOD_BIT;
             }
-            var rigidBody = collider.rigidBody;
-            // Rigid body data
-            for (var i = 0; i < config.RIGID_BODY_PROPS.length; i++) {
-                var item = config.RIGID_BODY_PROPS[i];
-                var propName = item[0];
-                var value = rigidBody[propName];
-                var size = item[1];
-                if (value === undefined || value === null) {
-                    continue;
-                }
-                if (size > 1) {
-                    if (value._dirty || isCreate) {
-                        if (size === 3) {
-                            this._cmdBuffer.packVector3(value);
-                        } else if(size === 4) {
-                            this._cmdBuffer.packVector4(value);
+
+            var collisionObject = collider.collisionObject;
+            // Collision object is not a ghost object
+            if (!collider.isGhostObject) {
+                // Rigid body data
+                for (var i = 0; i < config.RIGID_BODY_PROPS.length; i++) {
+                    var item = config.RIGID_BODY_PROPS[i];
+                    var propName = item[0];
+                    var value = collisionObject[propName];
+                    var size = item[1];
+                    if (value === undefined || value === null) {
+                        continue;
+                    }
+                    if (size > 1) {
+                        if (value._dirty || isCreate) {
+                            if (size === 3) {
+                                this._cmdBuffer.packVector3(value);
+                            } else if(size === 4) {
+                                this._cmdBuffer.packVector4(value);
+                            }
+                            modBit |= item[2];
+                            value._dirty = false;
+                        }   
+                    } else {
+                        // TODO
+                        // is mass
+                        if (isCreate) {
+                            this._cmdBuffer.packScalar(value);
                         }
-                        modBit |= item[2];
-                        value._dirty = false;
-                    }   
-                } else {
-                    // TODO
-                    // is mass
-                    if (isCreate) {
-                        this._cmdBuffer.packScalar(value);
                     }
                 }
             }
-            var res = this._packShape(rigidBody.shape, isCreate);
+
+            var res = this._packShape(collisionObject.shape, isCreate);
             if (res) {
                 modBit |= config.SHAPE_MOD_BIT;
             }
 
-            // Material data
-            var material = collider.material;
-            if (material._dirty || isCreate) {
-                modBit |= config.MATERIAL_MOD_BIT;
-                for (var i = 0; i < config.MATERIAL_PROPS.length; i++) {
-                    var item = config.MATERIAL_PROPS[i];
-                    var propName = item[0];
-                    var value = material[propName];
-                    var size = item[1];
-                    if (size === 1) {
-                        this._cmdBuffer.packScalar(value);
-                    } else {
-                        // TODO
+            // Material data (collision object is not a ghost object)
+            if (!collider.isGhostObject) {
+                var material = collider.material;
+                if (material._dirty || isCreate) {
+                    modBit |= config.MATERIAL_MOD_BIT;
+                    for (var i = 0; i < config.MATERIAL_PROPS.length; i++) {
+                        var item = config.MATERIAL_PROPS[i];
+                        var propName = item[0];
+                        var value = material[propName];
+                        var size = item[1];
+                        if (size === 1) {
+                            this._cmdBuffer.packScalar(value);
+                        } else {
+                            // TODO
+                        }
                     }
+                    material._dirty = false;
                 }
-                material._dirty = false;
             }
 
             return modBit;
@@ -337,6 +358,75 @@ define(function(require) {
                 }
             }
 
+            return offset;
+        },
+
+        _dispatchCollisionCallback : function(buffer, offset) {
+            
+            var nCollision = buffer[offset++];
+
+            for (var i = 0; i < this._contacts.length; i++) {
+                if (this._contacts[i]) {
+                    this._contacts[i].length = 0;
+                }
+            }
+
+            for (var i = 0; i < nCollision; i++) {
+                var idxA = buffer[offset++];
+                var idxB = buffer[offset++];
+
+                var colliderA = this._colliders[idxA];
+                var colliderB = this._colliders[idxB];
+
+                if (!this._contacts[idxA]) {
+                    this._contacts[idxA] = [];
+                }
+                if (!this._contacts[idxB]) {
+                    this._contacts[idxB] = [];
+                }
+
+                var nContacts = buffer[offset++];
+
+                var contactPoint0, contactPoint1;
+                for (var j = 0; j < nContacts; j++) {
+                    if (colliderA.hasCollisionCallback()) {
+                        var contactPoint0 = new ContactPoint();
+                        contactPoint0.thisPoint.set(buffer[offset++], buffer[offset++], buffer[offset++]);
+                        contactPoint0.otherPoint.set(buffer[offset++], buffer[offset++], buffer[offset++]);
+                        contactPoint0.normal.set(buffer[offset++], buffer[offset++], buffer[offset++]);
+                        contactPoint0.otherCollider = colliderB;
+                        contactPoint0.thisCollider = colliderA;
+
+                        this._contacts[idxA].push(contactPoint0);
+                    }  else {
+                        contactPoint0 = null;
+                    }
+                    if (colliderB.hasCollisionCallback()) {
+                        var contactPoint1 = new ContactPoint();
+                        if (contactPoint0) {
+                            contactPoint1.thisPoint.copy(contactPoint0.otherPoint);
+                            contactPoint1.otherPoint.copy(contactPoint0.thisPoint);
+                            contactPoint1.normal.copy(contactPoint0.normal).negate();
+                        } else {
+                            contactPoint1.thisPoint.set(buffer[offset++], buffer[offset++], buffer[offset++]);
+                            contactPoint1.otherPoint.set(buffer[offset++], buffer[offset++], buffer[offset++]);
+                            contactPoint1.normal.set(buffer[offset++], buffer[offset++], buffer[offset++]);
+                        }
+                        contactPoint1.thisCollider = colliderB;
+                        contactPoint1.otherCollider = colliderA;
+
+                        this._contacts[idxB].push(contactPoint1);
+                    }
+                }
+
+                for (var i = 0; i < this._contacts.length; i++) {
+                    var contacts = this._contacts[i];
+                    if (contacts && contacts.length) {
+                        this._colliders[i].trigger('collision', contacts);
+                    }
+                }
+
+            }
             return offset;
         }
     });

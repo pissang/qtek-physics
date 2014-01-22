@@ -6,39 +6,39 @@ define(function(require) {
 
     var Collider = Base.derive({
 
-        rigidBody : null,
+        collisionObject : null,
 
         node : null,
 
         material : null,
 
-        _isKinematic : false,
+        isKinematic : false,
 
-        _isStatic : false,
+        isStatic : false,
 
-        _dirty : true
-    });
+        isGhostObject : false,
 
-    Object.defineProperty(Collider.prototype, 'isKinematic', {
-        get : function() {
-            return this._isKinematic;
-        },
-        set : function(value) {
-            this._isKinematic = value;
+        _dirty : true,
+
+        _collisionHasCallback : false
+    }, {
+
+        on : function(name, action, context) {
+            Base.prototype.on.call(this, name, action, context);
+            this._collisionHasCallback = true;
             this._dirty = true;
+        },
+
+        off : function(name, action) {
+            Base.prototype.off.call(this, name, action);
+        },
+
+        hasCollisionCallback : function() {
+            return this._collisionHasCallback;
         }
     });
 
-    Object.defineProperty(Collider.prototype, 'isStatic', {
-        get : function() {
-            return this._isStatic;
-        },
-        set : function(value) {
-            this._isStatic = value;
-            this._dirty = true;
-        }
-    });
-
+    Collider.events = ['collision'];
 
     return Collider;
 });

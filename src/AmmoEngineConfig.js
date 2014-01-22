@@ -10,7 +10,7 @@
 //      32 bit mask(1)
 //          But because it is stored in Float, so it can only use at most 24 bit (TODO)
 //      -------body-------
-//      collision flag
+//      collision flag(1)
 //      ...
 //      collision shape guid(1)
 //      shape type(1)
@@ -32,11 +32,12 @@
 //      timeStep(1)
 //      maxSubSteps(1)
 //      fixedTimeStep(1)
-this.CMD_ADD_RIGIDBODY = 0;
-this.CMD_REMOVE_RIGIDBODY = 1;
-this.CMD_MOD_RIGIDBODY = 2;
+this.CMD_ADD_COLLIDER = 0;
+this.CMD_REMOVE_COLLIDER = 1;
+this.CMD_MOD_COLLIDER = 2;
 this.CMD_SYNC_MOTION_STATE = 3;
 this.CMD_STEP_TIME = 4;
+this.CMD_COLLISION_CALLBACK = 5;
 
 // Message of step
 this.CMD_STEP = 10;
@@ -85,3 +86,11 @@ this.MATERIAL_PROPS = [
 // Collision Flags
 this.COLLISION_FLAG_STATIC = 0x1;
 this.COLLISION_FLAG_KINEMATIC = 0x2;
+this.COLLISION_FLAG_GHOST_OBJECT = 0x4;
+
+this.COLLISION_FLAG_HAS_CALLBACK = 0x200;
+
+// Collision Status
+this.COLLISION_STATUS_ENTER = 1;
+this.COLLISION_STATUS_STAY = 2;
+this.COLLISION_STATUS_LEAVE = 3;
