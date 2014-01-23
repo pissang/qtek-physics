@@ -77,6 +77,9 @@ define(function(require) {
                         case config.CMD_COLLISION_CALLBACK:
                             offset = self._dispatchCollisionCallback(buffer, offset);
                             break;
+                        case config.CMD_SYNC_INERTIA_TENSOR:
+                            offset = self._syncInertiaTensor(buffer, offset);
+                            break;
                         default:
                     }
                 }
@@ -460,6 +463,23 @@ define(function(require) {
                     }
                 }
 
+            }
+            return offset;
+        },
+
+        // Calculate the inertia tensor in the worker and sync back
+        _syncInertiaTensor : function(buffer, offset) {
+            var nBody = buffer[offset++];
+            for (var i = 0; i < nBody; i++) {
+                var idx = buffer[offset++];
+                var collider = this._colliders[idx];
+                var body = collider.collisionObject;
+
+                var m = body.invInertiaTensorWorld._array;
+
+                for (var j= 0; j < 9; j++) {
+                    m[j] = buffer[offset++];
+                }
             }
             return offset;
         }

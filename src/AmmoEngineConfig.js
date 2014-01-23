@@ -39,6 +39,8 @@ this.CMD_SYNC_MOTION_STATE = 3;
 this.CMD_STEP_TIME = 4;
 this.CMD_COLLISION_CALLBACK = 5;
 
+this.CMD_SYNC_INERTIA_TENSOR = 6;
+
 // Message of step
 this.CMD_STEP = 10;
 

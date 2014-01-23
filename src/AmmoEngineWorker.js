@@ -10,6 +10,9 @@ importScripts('../lib/ammo.fast.js');
  ********************************************/
 
 function PhysicsObject(collisionObject, transform) {
+
+    this.__idx__ = 0;
+
     this.collisionObject = collisionObject || null;
     this.transform = transform || null;
 
@@ -41,12 +44,15 @@ onmessage = function(e) {
     var nChunk = buffer[0];
 
     var offset = 1;
+    var haveStep = false;
+    var stepTime, maxSubSteps, fixedTimeStep;
+    var addedCollisonObjects = [];
     for (var i = 0; i < nChunk; i++) {
         var cmdType = buffer[offset++];
         // Dispatch
         switch(cmdType) {
             case CMD_ADD_COLLIDER:
-                offset = cmd_AddCollisionObject(buffer, offset);
+                offset = cmd_AddCollisionObject(buffer, offset, addedCollisonObjects);
                 break;
             case CMD_REMOVE_COLLIDER:
                 offset = cmd_RemoveCollisionObject(buffer, offset);
@@ -55,10 +61,42 @@ onmessage = function(e) {
                 offset = cmd_ModCollisionObject(buffer, offset);
                 break;
             case CMD_STEP:
-                cmd_Step(buffer[offset++], buffer[offset++], buffer[offset++]);
+                haveStep = true;
+                stepTime = buffer[offset++];
+                maxSubSteps = buffer[offset++];
+                fixedTimeStep = buffer[offset++];
                 break;
             default:
         }
+    }
+
+    // Sync back inertia tensor
+    // Calculating torque needs this stuff
+    if (addedCollisonObjects.length > 0) { 
+        g_buffer.offset = 0;
+        g_buffer.packScalar(1); // nChunk
+        g_buffer.packScalar(CMD_SYNC_INERTIA_TENSOR);   // Command
+        g_buffer.packScalar(0); // nBody
+        var nBody = 0;
+        for (var i = 0; i < addedCollisonObjects.length; i++) {
+            var co = addedCollisonObjects[i];
+            var body = co.collisionObject;
+            if (body.getInvInertiaTensorWorld) {
+                var m3x3 = body.getInvInertiaTensorWorld();
+                g_buffer.packScalar(co.__idx__);
+                g_buffer.packMatrix3x3(m3x3);
+                nBody++;
+            }
+        }
+        g_buffer.array[2] = nBody;
+        var array = g_buffer.toFloat32Array();
+        postMessage(array.buffer, [array.buffer]);
+    }
+
+    g_buffer.offset = 0;
+    // Lazy execute
+    if (haveStep) {
+        cmd_Step(stepTime, maxSubSteps, fixedTimeStep);
     }
 }
 
@@ -91,6 +129,12 @@ var g_buffer = {
         this.array[this.offset++] = vector.getY();
         this.array[this.offset++] = vector.getZ();
         this.array[this.offset++] = vector.getW();
+    },
+
+    packMatrix3x3 : function(m3x3) {
+        this.packVector3(m3x3.getColumn(0));
+        this.packVector3(m3x3.getColumn(1));
+        this.packVector3(m3x3.getColumn(2));
     },
 
     toFloat32Array : function() {
@@ -232,7 +276,7 @@ function _createShape(buffer, offset) {
                 COMMANDS
  ********************************************/
 
-function cmd_AddCollisionObject(buffer, offset) {
+function cmd_AddCollisionObject(buffer, offset, out) {
     var idx = buffer[offset++];
     var bitMask = buffer[offset++];
 
@@ -300,6 +344,7 @@ function cmd_AddCollisionObject(buffer, offset) {
         var mass = 0;
     }
 
+    var physicsObject;
     if (!isGhostObject) {
         if (!localInertia) {
             localInertia = new Ammo.btVector3(0, 0, 0);
@@ -325,7 +370,7 @@ function cmd_AddCollisionObject(buffer, offset) {
         rigidBody.setFriction(buffer[offset++]);
         rigidBody.setRestitution(buffer[offset++]);
 
-        var physicsObject = new PhysicsObject(rigidBody, transform);
+        physicsObject = new PhysicsObject(rigidBody, transform);
         physicsObject.hasCallback = hasCallback;
         g_objectsList[idx] = physicsObject;
         g_ammoPtrIdxMap[rigidBody.ptr] = idx;
@@ -337,7 +382,7 @@ function cmd_AddCollisionObject(buffer, offset) {
         ghostObject.setCollisionShape(shape);
         ghostObject.setWorldTransform(transform);
 
-        var physicsObject = new PhysicsObject(ghostObject, transform);
+        physicsObject = new PhysicsObject(ghostObject, transform);
         physicsObject.hasCallback = hasCallback;
         physicsObject.isGhostObject = true;
         g_objectsList[idx] = physicsObject;
@@ -350,6 +395,9 @@ function cmd_AddCollisionObject(buffer, offset) {
             g_world.getPairCache().setInternalGhostPairCallback(g_ghostPairCallback);
         }
     }
+
+    physicsObject.__idx__ = idx;
+    out.push(physicsObject);
 
     return offset;
 }
@@ -454,7 +502,6 @@ function cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {
     var stepTime = new Date().getTime() - startTime;
 
     var nChunk = 3;
-    g_buffer.offset = 0;
     g_buffer.packScalar(nChunk);
 
     // Sync Motion State

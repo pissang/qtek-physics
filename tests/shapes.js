@@ -316,10 +316,11 @@ define(function(require) {
 
     engine.addCollider(collider);
 
-    var force = new qtek.math.Vector3(0, 100, 0);
+    var force = new qtek.math.Vector3(0, 1, 0);
+    var pos = new qtek.math.Vector3(0, 0, 10);
     collider.on('collision', function(contacts) {
         for (var i = 0; i < contacts.length; i++) {
-            contacts[i].otherCollider.collisionObject.applyForce(force);
+            contacts[i].otherCollider.collisionObject.applyImpulse(force, pos);
         }
     });
 

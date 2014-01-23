@@ -35,7 +35,9 @@ define(function(require) {
             //      Dynamic if mass is positive
             // y : linearDamping
             // z : angularDamping
-            massAndDamping : new Vector3()
+            massAndDamping : new Vector3(),
+
+            invInertiaTensorWorld : new Matrix3()
         };
     }, {
 
@@ -78,7 +80,9 @@ define(function(require) {
         applyTorqueImpulse : (function() {
             var scaledTorqueImpuse = new Vector3();
             return function(torqueImpulse) {
-                // TODO
+                vec3.mul(scaledTorqueImpuse._array, torqueImpulse._array, this.angularFactor._array);
+                vec3.transformMat3(this.angularVelocity._array, scaledTorqueImpuse._array, this.invInertiaTensorWorld._array);
+                this.angularVelocity._dirty = true;
             }
         })(),
 
