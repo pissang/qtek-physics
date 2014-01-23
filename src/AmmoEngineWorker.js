@@ -107,19 +107,14 @@ function _unPackVector3(buffer, offset) {
     return new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset]);
 }
 
-function _setVector3(vec3, buffer, offset) {
-    vec3.setX(buffer[offset++]);
-    vec3.setY(buffer[offset++]);
-    vec3.setZ(buffer[offset++]);
+function _setVector3(vec, buffer, offset) {
+    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);
     return offset;
 }
 
-function _setVector4(vec4, buffer, offset) {
-    vec4.setX(buffer[offset++]);
-    vec4.setY(buffer[offset++]);
-    vec4.setZ(buffer[offset++]);
-    vec4.setW(buffer[offset++]);
-    return offset++
+function _setVector4(vec, buffer, offset) {
+    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);
+    return offset;
 }
 
 function _createShape(buffer, offset) {
@@ -199,12 +194,34 @@ function _createShape(buffer, offset) {
 
         g_shapes[shapeId] = shape;
     } else {
-        if (shapeType === SHAPE_SPHERE) {
-            offset += 1;
-        } else if (shapeType === SHAPE_CONVEX_TRIANGLE_MESH) {
-            // TODO
-        } else {
-            offset += 3;
+        switch(shapeType) {
+            case SHAPE_SPHERE:
+                offset++;
+                break;
+            case SHAPE_BOX:
+            case SHAPE_CYLINDER:
+                offset += 3;
+                break;
+            case SHAPE_CONE:
+            case SHAPE_CAPSULE:
+                offset += 2;
+                break;
+            case SHAPE_CONVEX_TRIANGLE_MESH:
+            case SHAPE_BVH_TRIANGLE_MESH:
+                var nTriangles = buffer[offset++];
+                var nVertices = buffer[offset++];
+                offset += nTriangles * 3 + nVertices * 3;
+                break;
+            case SHAPE_CONVEX_HULL:
+                var nPoints = buffer[offset++];
+                offset += nPoints * 3;
+                break;
+            case SHAPE_STATIC_PLANE:
+                offset += 4;
+                break;
+            default:
+                throw new Error('Unknown type ' + shapeType);
+                break;
         }
     }
 
@@ -259,12 +276,29 @@ function cmd_AddCollisionObject(buffer, offset) {
             var localInertia = _unPackVector3(buffer, offset);
             offset += 3;
         }
-        var mass = buffer[offset++];
+        if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {
+            var massAndDamping = _unPackVector3(buffer, offset);
+            offset += 3;
+        }
+        if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {
+            var totalForce = _unPackVector3(buffer, offset);
+            offset += 3;
+        }
+        if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {
+            var totalTorque = _unPackVector3(buffer, offset);
+            offset += 3;
+        }
     }
 
     var res = _createShape(buffer, offset);
     var shape = res[0];
     offset = res[1];
+
+    if (massAndDamping) {
+        var mass = massAndDamping.getX();
+    } else {
+        var mass = 0;
+    }
 
     if (!isGhostObject) {
         if (!localInertia) {
@@ -282,6 +316,11 @@ function cmd_AddCollisionObject(buffer, offset) {
         angularVelocity && rigidBody.setAngularVelocity(angularVelocity);
         linearFactor && rigidBody.setLinearFactor(linearFactor);
         angularFactor && rigidBody.setAngularFactor(angularFactor);
+        if (massAndDamping) {
+            rigidBody.setDamping(massAndDamping.getY(), massAndDamping.getZ());
+        }
+        totalForce && rigidBody.applyCentralForce(totalForce);
+        totalTorque && rigidBody.applyTorque(totalTorque);
 
         rigidBody.setFriction(buffer[offset++]);
         rigidBody.setRestitution(buffer[offset++]);
@@ -347,22 +386,22 @@ function cmd_ModCollisionObject(buffer, offset) {
         var motionState = collisionObject.getMotionState();
         var transform = obj.transform;
         motionState.getWorldTransform(transform);
-        offset = _setVector3(transform.getOrigin(), offset);
-        offset = _setVector4(transform.getRotation(), offset);
+        offset = _setVector3(transform.getOrigin(), buffer, offset);
+        offset = _setVector4(transform.getRotation(), buffer, offset);
         motionState.setWorldTransform(transform);
     }
 
     if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {
-        offset = _setVector3(collisionObject.getLinearVelocity(), offset);
+        offset = _setVector3(collisionObject.getLinearVelocity(), buffer, offset);
     }
     if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {
-        offset = _setVector3(collisionObject.getAngularVelocity(), offset);
+        offset = _setVector3(collisionObject.getAngularVelocity(), buffer, offset);
     }
     if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {
-        offset = _setVector3(collisionObject.getLinearFactor(), offset);
+        offset = _setVector3(collisionObject.getLinearFactor(), buffer, offset);
     }
     if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {
-        offset = _setVector3(collisionObject.getAngularFactor(), offset);
+        offset = _setVector3(collisionObject.getAngularFactor(), buffer, offset);
     }
     if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {
         // TODO
@@ -372,8 +411,17 @@ function cmd_ModCollisionObject(buffer, offset) {
         // TODO
         offset += 3;
     }
-    // TODO
-    var mass = buffer[offset++];
+    if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {
+        // TODO MASS
+        var mass = buffer[offset++];
+        collisionObject.setDamping(buffer[offset++], buffer[offset++]);
+    }
+    if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {
+        offset = _setVector3(collisionObject.getTotalForce(), buffer, offset);
+    }
+    if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {
+        offset = _setVector3(collisionObject.getTotalTorque(), buffer, offset);
+    }
     // Shape
     if (SHAPE_MOD_BIT & bitMask) {
         var res = _createShape(buffer, offset);

@@ -64,7 +64,9 @@ this.RIGID_BODY_PROPS = [
     ['angularFactor', 3, 0x8],
     ['centerOfMass', 3, 0x10],
     ['localInertia', 3, 0x20],
-    ['mass', 1]
+    ['massAndDamping', 3, 0x40],
+    ['totalForce', 3, 0x80],
+    ['totalTorque', 3, 0x100]
 ];
 
 this.RIGID_BODY_PROP_MOD_BIT = {};
@@ -72,11 +74,11 @@ this.RIGID_BODY_PROPS.forEach(function(item) {
     this.RIGID_BODY_PROP_MOD_BIT[item[0]] = item[2];
 }, this);
 
-this.SHAPE_MOD_BIT = 0x40;
-this.MATERIAL_MOD_BIT = 0x80;
-this.COLLISION_FLAG_MOD_BIT = 0x100;
+this.SHAPE_MOD_BIT = 0x200;
+this.MATERIAL_MOD_BIT = 0x400;
+this.COLLISION_FLAG_MOD_BIT = 0x800;
 
-this.MOTION_STATE_MOD_BIT = 0x200;
+this.MOTION_STATE_MOD_BIT = 0x1000;
 
 this.MATERIAL_PROPS = [
     ['friction', 1],

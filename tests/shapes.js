@@ -22,6 +22,10 @@ define(function(require) {
     var renderer = new qtek.Renderer({
         canvas : document.getElementById('Main')
     });
+    var shadowMapPass = new qtek.prePass.ShadowMap({
+        // softShadow : qtek.prePass.ShadowMap.VSM
+        // shadowCascade : 3
+    });
     renderer.resize(window.innerWidth, window.innerHeight);
     
     var animation = new qtek.animation.Animation();
@@ -34,7 +38,10 @@ define(function(require) {
     camera.position.set(0, 10, 30);
     camera.lookAt(qtek.math.Vector3.ZERO);
 
-    var light = new qtek.light.Directional();
+    var light = new qtek.light.Directional({
+        shadowResolution : 2048,
+        shadowBias : 0.005
+    });
     light.position.set(1, 2, 1);
     light.lookAt(qtek.math.Vector3.ZERO);
     scene.add(light);
@@ -56,20 +63,23 @@ define(function(require) {
     });
     engine.addCollider(new Collider({
         collisionObject : floorBody,
-        material : new PhysicsMaterial(),
-        node : planeMesh,
+        physicsMaterial : new PhysicsMaterial(),
+        sceneNode : planeMesh,
         isStatic : true
     }));
     // scene.add(planeMesh);
     
     /****************************
-                  Cube
+                Cube
      ****************************/
     var cubeGeo = new qtek.geometry.Cube();
     var material = new qtek.Material({
         shader : qtek.shader.library.get('buildin.physical')
     });
     material.set('color', [Math.random(), Math.random(), Math.random()]);
+    var boxShape = new BoxShape({
+        halfExtents : new qtek.math.Vector3(1, 1, 1)
+    });
     for (var i = 0; i < 50; i++) {
         
         var cubeMesh = new qtek.Mesh({
@@ -80,22 +90,20 @@ define(function(require) {
         scene.add(cubeMesh);
 
         var cubeBody = new RigidBody({
-            shape : new BoxShape({
-                halfExtents : new qtek.math.Vector3(1, 1, 1)
-            }),
+            shape : boxShape,
             mass : 1
         });
 
         engine.addCollider(new Collider({
             collisionObject : cubeBody,
-            material : new PhysicsMaterial(),
-            node : cubeMesh
+            physicsMaterial : new PhysicsMaterial(),
+            sceneNode : cubeMesh
         }));
     }
 
 
     /****************************
-                  Sphere
+                Sphere
      ****************************/
     var sphereGeo = new qtek.geometry.Sphere({
         widthSegments : 50,
@@ -105,6 +113,9 @@ define(function(require) {
         shader : qtek.shader.library.get('buildin.physical')
     });
     material.set('color', [Math.random(), Math.random(), Math.random()]);
+    var sphereShape = new SphereShape({
+        radius : 1
+    });
     for (var i = 0; i < 50; i++) {
         
         var sphereMesh = new qtek.Mesh({
@@ -115,18 +126,17 @@ define(function(require) {
         scene.add(sphereMesh);
 
         var sphereBody = new RigidBody({
-            shape : new SphereShape({
-                radius : 1
-            }),
-            mass : 1
+            shape : sphereShape,
+            mass : 1,
+            angularDamping : 0.4
         });
 
         engine.addCollider(new Collider({
             collisionObject : sphereBody,
-            material : new PhysicsMaterial({
+            physicsMaterial : new PhysicsMaterial({
                 friction : 0.9
             }),
-            node : sphereMesh
+            sceneNode : sphereMesh
         }));
     }
 
@@ -142,6 +152,8 @@ define(function(require) {
         shader : qtek.shader.library.get('buildin.physical')
     });
     material.set('color', [Math.random(), Math.random(), Math.random()]);
+
+    var cylinderShape = new CylinderShape();
     for (var i = 0; i < 50; i++) {
         
         var cylinderMesh = new qtek.Mesh({
@@ -152,21 +164,21 @@ define(function(require) {
         scene.add(cylinderMesh);
 
         var cylinderBody = new RigidBody({
-            shape : new CylinderShape(),
+            shape : cylinderShape,
             mass : 1
         });
 
         engine.addCollider(new Collider({
             collisionObject : cylinderBody,
-            material : new PhysicsMaterial({
+            physicsMaterial : new PhysicsMaterial({
                 friction : 0.9
             }),
-            node : cylinderMesh
+            sceneNode : cylinderMesh
         }));
     }
 
     /****************************
-                Convex Mesh
+            Convex Mesh 
      ****************************/
     var convexGeo = new qtek.geometry.Sphere({
         widthSegments : 4,
@@ -176,6 +188,9 @@ define(function(require) {
         shader : qtek.shader.library.get('buildin.physical')
     });
     material.set('color', [Math.random(), Math.random(), Math.random()]);
+    var convexShape = new ConvexTriangleMeshShape({
+        geometry : convexGeo
+    });
     for (var i = 0; i < 50; i++) {
         
         var convexMesh = new qtek.Mesh({
@@ -186,24 +201,22 @@ define(function(require) {
         scene.add(convexMesh);
 
         var convexBody = new RigidBody({
-            shape : new ConvexTriangleMeshShape({
-                geometry : convexGeo
-            }),
+            shape : convexShape,
             mass : 1
         });
 
         engine.addCollider(new Collider({
             collisionObject : convexBody,
-            material : new PhysicsMaterial({
+            physicsMaterial : new PhysicsMaterial({
                 friction : 0.9
             }),
-            node : convexMesh
+            sceneNode : convexMesh
         }));
     }
 
     /****************************
-                Convex Hull
-                Suzanne Monkey
+            Convex Hull
+            Suzanne Monkey
      ****************************/
     var loader = new qtek.loader.GLTF();
     loader.load('assets/suzanne.json');
@@ -223,7 +236,7 @@ define(function(require) {
         mesh.position.y = 20;
         mesh.material.set('glossiness', 0.7);
 
-        var body = new RigidBody({
+        var rigidBody = new RigidBody({
             shape : new ConvexHullShape({
                 geometry : geo
             }),
@@ -231,16 +244,19 @@ define(function(require) {
         });
 
         var collider = new Collider({
-            collisionObject : body,
-            material : new PhysicsMaterial({
+            collisionObject : rigidBody,
+            physicsMaterial : new PhysicsMaterial({
                 friction : 0.9
             }),
-            node : mesh
+            sceneNode : mesh
         });
         engine.addCollider(collider);
 
         collider.on('collision', function(contacts){
             // console.log(contacts.length);
+        });
+        document.body.addEventListener('click', function() {
+            rigidBody.applyForce(new qtek.math.Vector3(0, 100, 0));
         });
         scene.add(mesh);
     });
@@ -276,11 +292,11 @@ define(function(require) {
 
         engine.addCollider(new Collider({
             collisionObject : body,
-            material : new PhysicsMaterial({
+            physicsMaterial : new PhysicsMaterial({
                 friction : 0.9
             }),
             isStatic : true,
-            node : mesh
+            sceneNode : mesh
         }));
         scene.add(mesh);
     });
@@ -291,7 +307,15 @@ define(function(require) {
     });
     animation.on('frame', function(dTime) {
         control.update(dTime);
-        engine.step(dTime / 1000, Math.ceil(dTime / 1000 * 120), 1 / 120);
+        // shadowMapPass.render(renderer, scene, camera);
         renderer.render(scene, camera);
     });
+
+    var time = new Date().getTime();
+    engine.after('step', function() {
+        var currentTime = new Date().getTime();
+        engine.step(currentTime - time)
+        time = currentTime;
+    });
+    engine.step(0.03);
 });

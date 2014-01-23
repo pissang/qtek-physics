@@ -30,6 +30,14 @@ define(function(require) {
 
         workerUrl : '',
 
+        maxSubSteps : 3,
+
+        fixedTimeStep : 1 / 60,
+
+        _stepTime : 0,
+
+        _isWorkerFree : true,
+
         _stepTime : 0
 
     }, function () {
@@ -72,10 +80,19 @@ define(function(require) {
                         default:
                     }
                 }
+
+                self._isWorkerFree = true;
+
+                self.trigger('afterstep');
             }
         },
 
-        step : function(timeStep, maxSubSteps, fixedTimeStep) {
+        step : function(timeStep) {
+            // Wait when the worker is free to use
+            if (!this._isWorkerFree) {
+                this._stepTime = timeStep;
+                return;
+            }
 
             var nChunk = 0;
             this._cmdBuffer.setOffset(0);
@@ -86,7 +103,7 @@ define(function(require) {
             nChunk += this._doAddCollider();
 
             // Step
-            this._cmdBuffer.packValues(config.CMD_STEP, timeStep, maxSubSteps, fixedTimeStep);
+            this._cmdBuffer.packValues(config.CMD_STEP, this._stepTime, this.maxSubSteps, this.fixedTimeStep);
             nChunk++;
 
             this._cmdBuffer.set(0, nChunk);
@@ -94,6 +111,25 @@ define(function(require) {
             // For example, when transferring an ArrayBuffer from your main app to Worker, the original ArrayBuffer is cleared and no longer usable
             var array = this._cmdBuffer.toFloat32Array();
             this._engineWorker.postMessage(array.buffer, [array.buffer]);
+
+            // Clear forces at the end of each step
+            // http://bulletphysics.org/Bullet/phpBB3/viewtopic.php?t=8622
+            for (var i = 0; i < this._colliders.length; i++) {
+                var collider = this._colliders[i];
+                // TODO isKnematic ??? 
+                if (!(collider.isStatic || collider.isKinematic || collider.isGhostObject)) {
+                    var body = collider.collisionObject;
+                    body.totalForce._array[0] = 0;
+                    body.totalForce._array[1] = 0;
+                    body.totalForce._array[2] = 0;
+                    body.totalTorque._array[0] = 0;
+                    body.totalTorque._array[1] = 0;
+                    body.totalTorque._array[2] = 0;
+                }
+            }
+
+            this._isWorkerFree = false;
+            this._stepTime = 0;
         },
 
         addCollider : function(collider) {
@@ -159,18 +195,22 @@ define(function(require) {
             // Find modified rigid bodies
             for (var i = 0; i < this._colliders.length; i++) {
                 var collider = this._colliders[i];
+                var chunkOffset = this._cmdBuffer._offset;
+                // Header is 3 * 4 byte
                 this._cmdBuffer._offset += 3;
-                // Header is 32 * 3 bit
                 var modBit = this._packCollider(collider);
-                this._cmdBuffer._offset -= 3;
                 if (modBit !== 0) {
                     // Header
                     // CMD type
                     // id
                     // Mask bit
-                    this._cmdBuffer.packValues(config.CMD_MOD_COLLIDER, i, modBit);
+                    this._cmdBuffer.set(chunkOffset, config.CMD_MOD_COLLIDER);
+                    this._cmdBuffer.set(chunkOffset+1, i);
+                    this._cmdBuffer.set(chunkOffset+2, modBit);
 
                     nChunk++;
+                } else {
+                    this._cmdBuffer._offset -= 3;
                 }
             }
             return nChunk;
@@ -203,8 +243,8 @@ define(function(require) {
 
             //  Motion State 
             if (isCreate || collider.isKinematic) {
-                this._cmdBuffer.packVector3(collider.node.position);
-                this._cmdBuffer.packVector4(collider.node.rotation);
+                this._cmdBuffer.packVector3(collider.sceneNode.position);
+                this._cmdBuffer.packVector4(collider.sceneNode.rotation);
                 modBit |= config.MOTION_STATE_MOD_BIT;
             }
 
@@ -231,11 +271,7 @@ define(function(require) {
                             value._dirty = false;
                         }   
                     } else {
-                        // TODO
-                        // is mass
-                        if (isCreate) {
-                            this._cmdBuffer.packScalar(value);
-                        }
+                        console.warn('TODO');
                     }
                 }
             }
@@ -247,13 +283,13 @@ define(function(require) {
 
             // Material data (collision object is not a ghost object)
             if (!collider.isGhostObject) {
-                var material = collider.material;
-                if (material._dirty || isCreate) {
+                var physicsMaterial = collider.physicsMaterial;
+                if (physicsMaterial._dirty || isCreate) {
                     modBit |= config.MATERIAL_MOD_BIT;
                     for (var i = 0; i < config.MATERIAL_PROPS.length; i++) {
                         var item = config.MATERIAL_PROPS[i];
                         var propName = item[0];
-                        var value = material[propName];
+                        var value = physicsMaterial[propName];
                         var size = item[1];
                         if (size === 1) {
                             this._cmdBuffer.packScalar(value);
@@ -261,7 +297,7 @@ define(function(require) {
                             // TODO
                         }
                     }
-                    material._dirty = false;
+                    physicsMaterial._dirty = false;
                 }
             }
 
@@ -351,7 +387,7 @@ define(function(require) {
 
                 var collider = this._colliders[id];
 
-                var node = collider.node;
+                var node = collider.sceneNode;
                 if (node) {
                     node.position.set(buffer[offset++], buffer[offset++], buffer[offset++]);
                     node.rotation.set(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);

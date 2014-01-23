@@ -8,9 +8,9 @@ define(function(require) {
 
         collisionObject : null,
 
-        node : null,
+        sceneNode : null,
 
-        material : null,
+        physicsMaterial : null,
 
         isKinematic : false,
 
