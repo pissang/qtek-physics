@@ -8,6 +8,8 @@ define(function(require) {
     var glMatrix = require('glmatrix');
     var vec3 = glMatrix.vec3;
 
+    var Matrix3 = require('qtek/math/Matrix3');
+
     var RigidBody = Base.derive(function() {
         return {
 
@@ -67,7 +69,7 @@ define(function(require) {
                     this.linearVelocity.scaleAndAdd(scaledImpulse, 1 / this.mass);
                     if (relPos) {
                         vec3.cross(torqueImpulse._array, relPos._array, scaledImpulse._array);
-                        this.applyTorque(torqueImpulse);
+                        this.applyTorqueImpulse(torqueImpulse);
                     }
                 }
             }

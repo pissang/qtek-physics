@@ -332,8 +332,8 @@ function cmd_AddCollisionObject(buffer, offset) {
 
         g_world.addRigidBody(rigidBody);
     } else {
-        // TODO Pair Caching Ghost Object ?
-        var ghostObject = new Ammo.btGhostObject();
+        // TODO What's the difference of Pair Caching Ghost Object ?
+        var ghostObject = new Ammo.btPairCachingGhostObject();
         ghostObject.setCollisionShape(shape);
         ghostObject.setWorldTransform(transform);
 
@@ -374,6 +374,7 @@ function cmd_ModCollisionObject(buffer, offset) {
 
     var obj = g_objectsList[idx];
     var collisionObject = obj.collisionObject;
+    var bodyNeedsActive = false;
 
     if (COLLISION_FLAG_MOD_BIT & bitMask) {
         var collisionFlags = buffer[offset++];
@@ -393,9 +394,11 @@ function cmd_ModCollisionObject(buffer, offset) {
 
     if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {
         offset = _setVector3(collisionObject.getLinearVelocity(), buffer, offset);
+        bodyNeedsActive = true;
     }
     if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {
         offset = _setVector3(collisionObject.getAngularVelocity(), buffer, offset);
+        bodyNeedsActive = true;
     }
     if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {
         offset = _setVector3(collisionObject.getLinearFactor(), buffer, offset);
@@ -418,10 +421,17 @@ function cmd_ModCollisionObject(buffer, offset) {
     }
     if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {
         offset = _setVector3(collisionObject.getTotalForce(), buffer, offset);
+        bodyNeedsActive = true;
     }
     if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {
         offset = _setVector3(collisionObject.getTotalTorque(), buffer, offset);
+        bodyNeedsActive = true;
     }
+
+    if (bodyNeedsActive) {
+        collisionObject.activate();
+    }
+
     // Shape
     if (SHAPE_MOD_BIT & bitMask) {
         var res = _createShape(buffer, offset);
@@ -510,39 +520,45 @@ function _tickCallback(world) {
             var obB = g_objectsList[obBIdx];
 
             if (obA.hasCallback || obB.hasCallback) {
-                var nActualContacts = 0;
                 var chunkStartOffset = g_buffer.offset;
-                // place holder for idxA, idxB, idxC
-                g_buffer.offset += 3;
-                var isCollided = false;
-                for (var j = 0; j < nContacts; j++) {
-                    var cp = contactManifold.getContactPoint(j);
-
-                    if (cp.getDistance() <= 0) {
-                        var pA = cp.getPositionWorldOnA();
-                        var pB = cp.getPositionWorldOnB();
-                        var normal = cp.get_m_normalWorldOnB();
-
-                        g_buffer.packVector3(pA);
-                        g_buffer.packVector3(pB);
-                        g_buffer.packVector3(normal);
-                        nActualContacts++;
-
-                        isCollided = true;
-                    }
-                }
-
-                if (isCollided) {
-                    g_buffer.array[chunkStartOffset] = obAIdx;
-                    g_buffer.array[chunkStartOffset+1] = obBIdx;
-                    g_buffer.array[chunkStartOffset+2] = nActualContacts;
+                if (_packContactManifold(contactManifold, chunkStartOffset, obAIdx, obBIdx)) {
                     nCollision++;
-                } else {
-                    g_buffer.offset -= 3;
                 }
             }
         }
     }
 
     g_buffer.array[tickCmdOffset] = nCollision;
+}
+
+function _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {
+    // place holder for idxA, idxB, nContacts
+    g_buffer.offset += 3;
+    var nActualContacts = 0;
+    var nContacts = contactManifold.getNumContacts();
+    for (var j = 0; j < nContacts; j++) {
+        var cp = contactManifold.getContactPoint(j);
+
+        if (cp.getDistance() <= 0) {
+            var pA = cp.getPositionWorldOnA();
+            var pB = cp.getPositionWorldOnB();
+            var normal = cp.get_m_normalWorldOnB();
+
+            g_buffer.packVector3(pA);
+            g_buffer.packVector3(pB);
+            g_buffer.packVector3(normal);
+            nActualContacts++;
+        }
+    }
+
+    if (nActualContacts > 0) {
+        g_buffer.array[offset] = obAIdx;
+        g_buffer.array[offset+1] = obBIdx;
+        g_buffer.array[offset+2] = nActualContacts;
+
+        return true;
+    } else {
+        g_buffer.offset -= 3;
+        return false;
+    }
 }

@@ -3,6 +3,7 @@ define(function(require) {
     var Engine = require('Engine');
     var Collider = require('Collider');
     var RigidBody = require('RigidBody');
+    var GhostObject = require('GhostObject');
     var BoxShape = require('BoxShape');
     var SphereShape = require('SphereShape');
     var CylinderShape = require('CylinderShape');
@@ -252,12 +253,6 @@ define(function(require) {
         });
         engine.addCollider(collider);
 
-        collider.on('collision', function(contacts){
-            // console.log(contacts.length);
-        });
-        document.body.addEventListener('click', function() {
-            rigidBody.applyForce(new qtek.math.Vector3(0, 100, 0));
-        });
         scene.add(mesh);
     });
 
@@ -299,6 +294,33 @@ define(function(require) {
             sceneNode : mesh
         }));
         scene.add(mesh);
+    });
+    
+    /****************************
+            Ghost Object
+     ****************************/
+    var boxShape = new BoxShape({
+        halfExtents : new qtek.math.Vector3(10, 10, 10)
+    });
+    var ghostObject = new GhostObject({
+        shape : boxShape
+    });
+    var emptyNode = new qtek.Node({
+        position : new qtek.math.Vector3(10, 0, 10)
+    });
+    var collider = new Collider({
+        collisionObject : ghostObject,
+        isGhostObject : true,
+        sceneNode : emptyNode
+    });
+
+    engine.addCollider(collider);
+
+    var force = new qtek.math.Vector3(0, 100, 0);
+    collider.on('collision', function(contacts) {
+        for (var i = 0; i < contacts.length; i++) {
+            contacts[i].otherCollider.collisionObject.applyForce(force);
+        }
     });
 
     var control = new qtek.plugin.OrbitControl({

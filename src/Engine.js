@@ -2,6 +2,8 @@
 // https://github.com/kripken/ammo.js
 define(function(require) {
 
+    'use strict';
+
     var Base = require('qtek/core/Base');
     var configStr = require('text!./AmmoEngineConfig');
 
@@ -36,9 +38,7 @@ define(function(require) {
 
         _stepTime : 0,
 
-        _isWorkerFree : true,
-
-        _stepTime : 0
+        _isWorkerFree : true
 
     }, function () {
         this.init();
@@ -367,8 +367,6 @@ define(function(require) {
                         this._cmdBuffer.packArray(geo.attributes.position.value[i]);
                     }
                 }
-            } else {
-                shapeType = -1;
             }
 
             if (shape.halfExtents) {
