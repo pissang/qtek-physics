@@ -431,7 +431,7 @@ function cmd_ModCollisionObject(buffer, offset) {
         obj.hasCallback = collisionFlags & COLLISION_FLAG_HAS_CALLBACK;
         obj.isGhostObject = collisionFlags & COLLISION_FLAG_GHOST_OBJECT;
     }
-    if (MOTION_STATE_MOD_BIT.position & bitMask) {
+    if (MOTION_STATE_MOD_BIT & bitMask) {
         var motionState = collisionObject.getMotionState();
         var transform = obj.transform;
         motionState.getWorldTransform(transform);

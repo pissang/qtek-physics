@@ -75,9 +75,10 @@ define(function(require) {
      ****************************/
     var cubeGeo = new qtek.geometry.Cube();
     var material = new qtek.Material({
-        shader : qtek.shader.library.get('buildin.physical')
+        shader : qtek.shader.library.get('buildin.physical', 'diffuseMap')
     });
-    material.set('color', [Math.random(), Math.random(), Math.random()]);
+    var texture = qtek.util.texture.createChessboard();
+    material.set('diffuseMap', texture);
     var boxShape = new BoxShape({
         halfExtents : new qtek.math.Vector3(1, 1, 1)
     });
@@ -110,10 +111,6 @@ define(function(require) {
         widthSegments : 50,
         heightSegments : 50
     });
-    material = new qtek.Material({
-        shader : qtek.shader.library.get('buildin.physical')
-    });
-    material.set('color', [Math.random(), Math.random(), Math.random()]);
     var sphereShape = new SphereShape({
         radius : 1
     });
@@ -149,10 +146,6 @@ define(function(require) {
         heightSegments : 10,
         capSegments : 40
     });
-    material = new qtek.Material({
-        shader : qtek.shader.library.get('buildin.physical')
-    });
-    material.set('color', [Math.random(), Math.random(), Math.random()]);
 
     var cylinderShape = new CylinderShape();
     for (var i = 0; i < 50; i++) {
@@ -185,10 +178,6 @@ define(function(require) {
         widthSegments : 4,
         heightSegments : 4
     });
-    material = new qtek.Material({
-        shader : qtek.shader.library.get('buildin.physical')
-    });
-    material.set('color', [Math.random(), Math.random(), Math.random()]);
     var convexShape = new ConvexTriangleMeshShape({
         geometry : convexGeo
     });
@@ -230,9 +219,7 @@ define(function(require) {
 
         var mesh = new qtek.Mesh({
             geometry : geo,
-            material : new qtek.Material({
-                shader : qtek.shader.library.get('buildin.physical')
-            })
+            material : material
         });
         mesh.position.y = 20;
         mesh.material.set('glossiness', 0.7);

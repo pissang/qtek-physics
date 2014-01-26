@@ -5,7 +5,7 @@ define(function(require) {
     'use strict';
 
     var Base = require('qtek/core/Base');
-    var configStr = require('text!./AmmoEngineConfig');
+    var configStr = require('text!./AmmoEngineConfig.js');
 
     var BoxShape = require('./BoxShape');
     var CapsuleShape = require('./CapsuleShape');
@@ -18,9 +18,6 @@ define(function(require) {
     var ConvexHullShape = require('./ConvexHullShape');
     var QBuffer  = require('./Buffer');
     var ContactPoint = require('./ContactPoint');
-
-    var StaticGeometry = require('qtek/StaticGeometry');
-    var DynamicGeometry = require('qtek/DynamicGeometry');
 
     var Vector3 = require('qtek/math/Vector3');
 
@@ -347,7 +344,8 @@ define(function(require) {
                 // nTriangles - nVertices - indices - vertices 
                 this._cmdBuffer.packScalar(geo.getFaceNumber());
                 this._cmdBuffer.packScalar(geo.getVertexNumber());
-                if (geo instanceof StaticGeometry) {
+                // Static Geometry
+                if (geo.isStatic()) {
                     this._cmdBuffer.packArray(geo.faces);
                     this._cmdBuffer.packArray(geo.attributes.position.value);
                 } else {
@@ -363,7 +361,8 @@ define(function(require) {
                 var geo = shape.geometry;
                 // nPoints - points
                 this._cmdBuffer.packScalar(geo.getVertexNumber());
-                if (geo instanceof StaticGeometry) {
+                // Static Geometry
+                if (geo.isStatic()) {
                     this._cmdBuffer.packArray(geo.attributes.position.value);
                 } else {
                     for (var i = 0; i < geo.attributes.position.value.length; i++) {

@@ -1,0 +1,11 @@
+{
+    "name" : "qtek-physics",
+    "version" : "0.1.0",
+    "devDependencies" : {
+        "grunt" : "*",
+        "grunt-contrib-requirejs" : "*",
+        "grunt-contrib-uglify" : "*",
+        "grunt-contrib-jshint" : "*",
+        "grunt-preprocess" : "*"
+    }
+}

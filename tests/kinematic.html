@@ -1,0 +1,144 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        <script type="text/javascript" src="../../qtek/thirdparty/require.js"></script>
+        <script type="text/javascript" src="js/config.js"></script>
+    </head>
+    <body style="margin:0px;">
+        <canvas width="1200" height="640" id="Main"></canvas>
+        <div id="time" style="position:absolute;left:10px;top:10px;"></div>
+        <script type="text/javascript">
+            require([
+                'qtek/qtek',
+                'qtek-physics'
+            ], function(qtek, qtekPhysics) {
+
+                var engine = new qtekPhysics.Engine({
+                    workerUrl : '../src/AmmoEngineWorker'
+                });
+                var renderer = new qtek.Renderer({
+                    canvas : document.getElementById('Main')
+                });
+                renderer.resize(window.innerWidth, window.innerHeight);
+
+                var animation = new qtek.animation.Animation();
+                animation.start();
+                
+                var scene = new qtek.Scene();
+                var camera = new qtek.camera.Perspective({
+                    aspect : renderer.width / renderer.height
+                });
+                camera.position.set(0, 10, 30);
+                camera.lookAt(qtek.math.Vector3.ZERO);
+
+                var light = new qtek.light.Directional({
+                    shadowResolution : 2048,
+                    shadowBias : 0.005
+                });
+                light.position.set(1, 2, 1);
+                light.lookAt(qtek.math.Vector3.ZERO);
+                scene.add(light);
+                scene.add(new qtek.light.Ambient({intensity : 0.1}));
+
+                var material = new qtek.Material({
+                    shader : qtek.shader.library.get('buildin.physical', 'diffuseMap')
+                });
+                material.set('glossiness', 0.2);
+                var texture = qtek.util.texture.createChessboard();
+                material.set('diffuseMap', texture);
+
+                var planeMesh = new qtek.Mesh({
+                    material : material,
+                    geometry : new qtek.geometry.Plane(),
+                    scale : new qtek.math.Vector3(100, 100, 1)
+                });
+                planeMesh.rotation.rotateX(-Math.PI / 2);
+
+                var floorBody = new qtekPhysics.RigidBody({
+                    shape : new qtekPhysics.StaticPlaneShape()
+                });
+                engine.addCollider(new qtekPhysics.Collider({
+                    collisionObject : floorBody,
+                    physicsMaterial : new qtekPhysics.Material(),
+                    sceneNode : planeMesh,
+                    isStatic : true
+                }));
+                scene.add(planeMesh);
+                /****************************
+                            Cube
+                 ****************************/
+                var cubeGeo = new qtek.geometry.Cube();
+                var boxShape = new qtekPhysics.BoxShape({
+                    halfExtents : new qtek.math.Vector3(1, 1, 1)
+                });
+                for (var i = 0; i < 100; i++) {
+                    var cubeMesh = new qtek.Mesh({
+                        geometry : cubeGeo,
+                        material : material,
+                        position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
+                    });
+                    scene.add(cubeMesh);
+
+                    var cubeBody = new qtekPhysics.RigidBody({
+                        shape : boxShape,
+                        mass : 1
+                    });
+
+                    engine.addCollider(new qtekPhysics.Collider({
+                        collisionObject : cubeBody,
+                        physicsMaterial : new qtekPhysics.Material(),
+                        sceneNode : cubeMesh
+                    }));
+                }
+
+                /****************************
+                        Big Cube
+                 ****************************/
+                var bigBoxShape = new qtekPhysics.BoxShape({
+                    halfExtents : new qtek.math.Vector3(5, 5, 5)
+                });
+                var bigCubeMesh = new qtek.Mesh({
+                    geometry : cubeGeo,
+                    material : material,
+                    position : new qtek.math.Vector3(5, 5, 5)
+                });
+                bigCubeMesh.scale.set(5, 5, 5);
+                scene.add(bigCubeMesh);
+
+                var bigCubeBody = new qtekPhysics.RigidBody({
+                    shape : bigBoxShape,
+                    mass : 1
+                });
+                var collider = new qtekPhysics.Collider({
+                    collisionObject : bigCubeBody,
+                    physicsMaterial : new qtekPhysics.Material(),
+                    sceneNode : bigCubeMesh,
+                    isKinematic : true
+                });
+
+                engine.addCollider(collider);
+
+                var control = new qtek.plugin.OrbitControl({
+                    target : camera,
+                    domElement : renderer.canvas
+                });
+                animation.on('frame', function(dTime) {
+                    control.update(dTime);
+                    // shadowMapPass.render(renderer, scene, camera);
+                    renderer.render(scene, camera);
+                });
+
+                var time = new Date().getTime();
+                engine.after('step', function() {
+                    var currentTime = new Date().getTime();
+                    var dTime = currentTime - time;
+                    engine.step(dTime)
+                    time = currentTime;
+
+                    bigCubeMesh.rotateAround(qtek.math.Vector3.ZERO, qtek.math.Vector3.UP,  dTime / 1000);
+                });
+                engine.step(0.03);
+            });
+        </script>
+    </body>
+</html>
