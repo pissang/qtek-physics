@@ -12,7 +12,6 @@
                 'qtek/qtek',
                 'qtek-physics'
             ], function(qtek, qtekPhysics) {
-
                 var engine = new qtekPhysics.Engine({
                     workerUrl : '../src/AmmoEngineWorker'
                 });
@@ -28,7 +27,7 @@
                 var camera = new qtek.camera.Perspective({
                     aspect : renderer.width / renderer.height
                 });
-                camera.position.set(0, 10, 30);
+                camera.position.set(0, 5, 10);
                 camera.lookAt(qtek.math.Vector3.ZERO);
 
                 var light = new qtek.light.Directional({
@@ -40,15 +39,15 @@
                 scene.add(light);
                 scene.add(new qtek.light.Ambient({intensity : 0.1}));
 
-                var material = new qtek.Material({
+                var planeMaterial = new qtek.Material({
                     shader : qtek.shader.library.get('buildin.physical', 'diffuseMap')
                 });
-                material.set('glossiness', 0.2);
-                var texture = qtek.util.texture.createChessboard();
-                material.set('diffuseMap', texture);
+                planeMaterial.set('glossiness', 0.2);
+                var texture = qtek.util.texture.createChessboard(1024, 16);
+                planeMaterial.set('diffuseMap', texture);
 
                 var planeMesh = new qtek.Mesh({
-                    material : material,
+                    material : planeMaterial,
                     geometry : new qtek.geometry.Plane(),
                     scale : new qtek.math.Vector3(100, 100, 1)
                 });
@@ -63,64 +62,93 @@
                     sceneNode : planeMesh,
                     isStatic : true
                 }));
-                scene.add(planeMesh);
-                /****************************
-                            Cube
-                 ****************************/
-                var cubeGeo = new qtek.geometry.Cube();
-                var boxShape = new qtekPhysics.BoxShape({
-                    halfExtents : new qtek.math.Vector3(1, 1, 1)
-                });
-                for (var i = 0; i < 100; i++) {
-                    var cubeMesh = new qtek.Mesh({
-                        geometry : cubeGeo,
-                        material : material,
-                        position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
-                    });
-                    scene.add(cubeMesh);
-
-                    var cubeBody = new qtekPhysics.RigidBody({
-                        shape : boxShape,
-                        mass : 1
-                    });
-
-                    engine.addCollider(new qtekPhysics.Collider({
-                        collisionObject : cubeBody,
-                        physicsMaterial : new qtekPhysics.Material(),
-                        sceneNode : cubeMesh
-                    }));
-                }
-
+                // scene.add(planeMesh);
 
                 /****************************
-                        Convex Hull
+                            Barrel
                  ****************************/
-                var convexShape = new qtekPhysics.ConvexHullShape({
+                var loader = new qtek.loader.GLTF();
+                loader.load('assets/prop_barrel.json');
+
+                var barrelShape = new qtekPhysics.ConvexHullShape({
                     geometry : new qtek.geometry.Cylinder({
                         capSegments : 8,
                         height : 1.2,
                         radius : 0.5
                     })
                 });
-                for (var i = 0; i < 20; i++) {
-                    var convexMesh = new qtek.Mesh({
-                        geometry : convexShape.geometry,
-                        material : material,
-                        position : new qtek.math.Vector3(20 - Math.random() * 40, Math.random() * 40, 20 - Math.random() * 40)
-                    });
-                    scene.add(convexMesh);
+                var barrelPhysicsMaterial = new qtekPhysics.Material();
+                loader.success(function(res) {
+                    var _scene = res.scene;
+                    var barrelNode = _scene.getNode('prop_barrel');
+                    barrelNode.childAt(0).position.y -= 0.6;
+                    barrelNode.childAt(1).position.y -= 0.6;
 
-                    var convexBody = new qtekPhysics.RigidBody({
-                        shape : convexShape,
+                    qtek.core.util.each(res.materials, function(mat, name) {
+                        mat.shader.define('DIFFUSEMAP_ALPHA_GLOSS');
+                        mat.set('glossiness', 0.5);
+                    });
+                    qtek.core.util.each(res.textures, function(texture) {
+                        texture.flipY = false;
+                    });
+                    for (var i = 0; i < 400; i++) {
+                        var newBarrel = barrelNode.clone();
+                        newBarrel.position.set(Math.random() * 30 - 15, Math.random() * 10 + 5, Math.random() * 30 - 15);
+                        scene.add(newBarrel);
+
+                        var rigidBody = new qtekPhysics.RigidBody({
+                            shape : barrelShape,
+                            mass : 10
+                        });
+                        var collider = new qtekPhysics.Collider({
+                            collisionObject : rigidBody,
+                            sceneNode : newBarrel,
+                            physicsMaterial : barrelPhysicsMaterial
+                        });
+                        engine.addCollider(collider);
+                    }
+                });
+
+                /****************************
+                        BVH Mesh
+                 ****************************/
+                var loader = new qtek.loader.GLTF();
+                loader.load('assets/env_stealth_collision.json');
+                loader.success(function(res) {
+                    var _scene = res.scene;
+                    var geo = _scene.getNode('env_stealth_collision').geometry;
+                    var scaleMat = new qtek.math.Matrix4();
+                    scaleMat.scale(new qtek.math.Vector3(3, 3, 3));
+                    geo.applyTransform(scaleMat);
+
+                    var mesh = new qtek.Mesh({
+                        geometry : geo,
+                        culling : false,
+                        material : new qtek.Material({
+                            shader : qtek.shader.library.get('buildin.physical')
+                        })
+                    });
+                    mesh.position.set(-40, 0, -30);
+                    mesh.material.set('glossiness', 0.2);
+
+                    var body = new qtekPhysics.RigidBody({
+                        shape : new qtekPhysics.BvhTriangleMeshShape({
+                            geometry : geo
+                        }),
                         mass : 1
                     });
 
                     engine.addCollider(new qtekPhysics.Collider({
-                        collisionObject : convexBody,
-                        physicsMaterial : new qtekPhysics.Material(),
-                        sceneNode : convexMesh
+                        collisionObject : body,
+                        physicsMaterial : new qtekPhysics.Material({
+                            friction : 0.9
+                        }),
+                        isStatic : true,
+                        sceneNode : mesh
                     }));
-                }
+                    scene.add(mesh);
+                });
+                
                 /****************************
                         Interaction
                  ****************************/
@@ -144,33 +172,15 @@
                     var start = ray.origin;
                     var end = ray.origin.clone().scaleAndAdd(ray.direction, 1000);
                     engine.rayTest(start, end, function(collider, hitPoint, hitNormal) {
-                        collider.collisionObject.applyImpulse(ray.direction.clone().scale(10), hitPoint.sub(collider.sceneNode.position));
+                        if (collider.collisionObject) {
+                            collider.collisionObject.applyImpulse(ray.direction.clone().scale(30), hitPoint.sub(collider.sceneNode.position));
+                        }
                     });
                 }
 
                 // Shoot cube
                 document.body.onkeydown = function(e) {
                     if (e.keyCode === 32) {
-                        var ray = camera.castRay(new qtek.math.Vector2());
-
-                        var cubeMesh = new qtek.Mesh({
-                            geometry : cubeGeo,
-                            material : material,
-                            position : ray.origin.clone().add(ray.direction.clone().scale(5))
-                        });
-                        scene.add(cubeMesh);
-                        var cubeBody = new qtekPhysics.RigidBody({
-                            shape : boxShape,
-                            mass : 1
-                        });
-                        var collider = new qtekPhysics.Collider({
-                            collisionObject : cubeBody,
-                            physicsMaterial : new qtekPhysics.Material(),
-                            sceneNode : cubeMesh
-                        });
-                        engine.addCollider(collider);
-
-                        cubeBody.applyImpulse(ray.direction.clone().add(new qtek.math.Vector3(0, 0.5, 0)).scale(20));
                     }
                 }
 

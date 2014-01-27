@@ -4,8 +4,7 @@ define(function(require) {
     
     var Base = require('qtek/core/Base');
 
-    var Shape = Base.derive({
-    }, {
+    var Shape = Base.derive({}, {
         dirty : function() {
             this._dirty = true;
         }
