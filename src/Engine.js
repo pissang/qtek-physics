@@ -17,6 +17,7 @@ define(function(require) {
     var BvhTriangleMeshShape = require('./BvhTriangleMeshShape');
     var ConvexHullShape = require('./ConvexHullShape');
     var QBuffer  = require('./Buffer');
+    var QPool = require('./Pool');
     var ContactPoint = require('./ContactPoint');
 
     var Vector3 = require('qtek/math/Vector3');
@@ -25,17 +26,33 @@ define(function(require) {
 
     var config = new ConfigCtor();
 
-    var Engine = Base.derive({
+    var Engine = Base.derive(function() {
 
-        workerUrl : '',
+        return {
+            workerUrl : '',
 
-        maxSubSteps : 3,
+            maxSubSteps : 3,
 
-        fixedTimeStep : 1 / 60,
+            fixedTimeStep : 1 / 60,
 
-        _stepTime : 0,
+            _stepTime : 0,
 
-        _isWorkerFree : true
+            _isWorkerFree : true,
+            _accumalatedTime : 0,
+
+            _colliders : new QPool(),
+
+            _collidersToAdd : [],
+            _collidersToRemove : [],
+
+            _contacts : [],
+
+            _callbacks : new QPool(),
+
+            _cmdBuffer : new QBuffer(),
+
+            _rayTestBuffer : new QBuffer()
+        }
 
     }, function () {
         this.init();
@@ -44,14 +61,6 @@ define(function(require) {
         init : function() {
             this._engineWorker = new Worker(this.workerUrl);
             
-            this._colliders = [];
-            this._empties = [];
-            this._collidersToAdd = [];
-            this._collidersToRemove = [];
-
-            this._contacts = [];
-
-            this._cmdBuffer = new QBuffer();
 
             var self = this;
 
@@ -77,6 +86,10 @@ define(function(require) {
                         case config.CMD_SYNC_INERTIA_TENSOR:
                             offset = self._syncInertiaTensor(buffer, offset);
                             break;
+                        case config.CMD_RAYTEST_ALL:
+                        case config.CMD_RAYTEST_CLOSEST:
+                            offset = self._rayTestCallback(buffer, offset, cmdType === config.CMD_RAYTEST_CLOSEST);
+                            break;
                         default:
                     }
                 }
@@ -88,10 +101,12 @@ define(function(require) {
         },
 
         step : function(timeStep) {
-            // Wait when the worker is free to use
+            // Wait until the worker is free to use
             if (!this._isWorkerFree) {
-                this._stepTime = timeStep;
+                this._accumalatedTime += timeStep;
                 return;
+            } else {
+                this._accumalatedTime = timeStep;
             }
 
             var nChunk = 0;
@@ -103,7 +118,7 @@ define(function(require) {
             nChunk += this._doAddCollider();
 
             // Step
-            this._cmdBuffer.packValues(config.CMD_STEP, this._stepTime, this.maxSubSteps, this.fixedTimeStep);
+            this._cmdBuffer.packValues(config.CMD_STEP, this._accumalatedTime, this.maxSubSteps, this.fixedTimeStep);
             nChunk++;
 
             this._cmdBuffer.set(0, nChunk);
@@ -114,8 +129,12 @@ define(function(require) {
 
             // Clear forces at the end of each step
             // http://bulletphysics.org/Bullet/phpBB3/viewtopic.php?t=8622
-            for (var i = 0; i < this._colliders.length; i++) {
-                var collider = this._colliders[i];
+            var colliders = this._colliders.getAll();
+            for (var i = 0; i < colliders.length; i++) {
+                var collider = colliders[i];
+                if (collider === null) {
+                    continue;
+                }
                 // TODO isKnematic ??? 
                 if (!(collider.isStatic || collider.isKinematic || collider.isGhostObject)) {
                     var body = collider.collisionObject;
@@ -129,7 +148,6 @@ define(function(require) {
             }
 
             this._isWorkerFree = false;
-            this._stepTime = 0;
         },
 
         addCollider : function(collider) {
@@ -143,19 +161,43 @@ define(function(require) {
             }
         },
 
+        rayTest : function(start, end, callback, closest) {
+            var idx = this._callbacks.add(callback);
+            this._rayTestBuffer.setOffset(0);
+            this._rayTestBuffer.packScalar(1);  // nChunk
+            if (closest || closest === undefined) {
+                this._rayTestBuffer.packScalar(config.CMD_RAYTEST_CLOSEST);
+            } else {
+                this._rayTestBuffer.packScalar(config.CMD_RAYTEST_ALL);
+            }
+            this._rayTestBuffer.packScalar(idx);
+            this._rayTestBuffer.packVector3(start);
+            this._rayTestBuffer.packVector3(end);
+
+            var array = this._rayTestBuffer.toFloat32Array();
+            this._engineWorker.postMessage(array.buffer, [array.buffer]);
+        },
+
+        _rayTestCallback : function(buffer, offset, isClosest) {
+            var idx = buffer[offset++];
+            var callback = this._callbacks.getAt(idx);
+            var colliderIdx = buffer[offset++];
+            var collider = null, hitPoint = null, hitNormal = null;
+            if (colliderIdx >= 0) {
+                var collider = this._colliders.getAt(colliderIdx);
+                var hitPoint = new Vector3(buffer[offset++], buffer[offset++], buffer[offset++]);
+                var hitNormal = new Vector3(buffer[offset++], buffer[offset++], buffer[offset++]);
+            }
+            callback && callback(collider, hitPoint, hitNormal);
+            this._callbacks.removeAt(idx);
+            return offset;
+        },
+
         _doAddCollider : function() {
             var nChunk = 0;
             for (var i = 0; i < this._collidersToAdd.length; i++) {
                 var collider = this._collidersToAdd[i];
-                var idx;
-                if (this._empties.length > 0) {
-                    idx = this._empties.pop();
-                    this._colliders[idx] = collider;
-                } else {
-                    idx = this._colliders.length;
-                    this._colliders.push(collider);
-                }
-
+                var idx = this._colliders.add(collider);
                 // Head
                 // CMD type
                 // id
@@ -176,8 +218,7 @@ define(function(require) {
             var nChunk = 0;
             for (var i = 0; i < this._collidersToRemove.length; i++) {
                 var idx = this._collidersToRemove[i];
-                this._colliders[idx] = null;
-                this._empties.push(idx);
+                this._colliders.removeAt(idx);
 
                 // Header
                 // CMD type
@@ -193,8 +234,12 @@ define(function(require) {
         _doModCollider : function() {
             var nChunk = 0;
             // Find modified rigid bodies
-            for (var i = 0; i < this._colliders.length; i++) {
-                var collider = this._colliders[i];
+            var colliders = this._colliders.getAll();
+            for (var i = 0; i < colliders.length; i++) {
+                var collider = colliders[i];
+                if (collider === null) {
+                    continue;
+                }
                 var chunkOffset = this._cmdBuffer._offset;
                 // Header is 3 * 4 byte
                 this._cmdBuffer._offset += 3;
@@ -239,6 +284,13 @@ define(function(require) {
                 modBit |= config.COLLISION_FLAG_MOD_BIT;
 
                 collider._dirty = false;
+            }
+
+            if (isCreate) {
+                // Collision masks
+                // TODO change after create
+                this._cmdBuffer.packScalar(collider.group);
+                this._cmdBuffer.packScalar(collider.collisionMask);
             }
 
             //  Motion State 
@@ -383,9 +435,9 @@ define(function(require) {
             var nObjects = buffer[offset++];
 
             for (var i = 0; i < nObjects; i++) {
-                var id = buffer[offset++];
+                var idx = buffer[offset++];
 
-                var collider = this._colliders[id];
+                var collider = this._colliders.getAt(idx);
 
                 var node = collider.sceneNode;
                 if (node) {
@@ -411,8 +463,8 @@ define(function(require) {
                 var idxA = buffer[offset++];
                 var idxB = buffer[offset++];
 
-                var colliderA = this._colliders[idxA];
-                var colliderB = this._colliders[idxB];
+                var colliderA = this._colliders.getAt(idxA);
+                var colliderB = this._colliders.getAt(idxB);
 
                 if (!this._contacts[idxA]) {
                     this._contacts[idxA] = [];
@@ -458,7 +510,8 @@ define(function(require) {
                 for (var i = 0; i < this._contacts.length; i++) {
                     var contacts = this._contacts[i];
                     if (contacts && contacts.length) {
-                        this._colliders[i].trigger('collision', contacts);
+                        var collider = this._colliders.getAt(i);
+                        collider.trigger('collision', contacts);
                     }
                 }
 
@@ -471,7 +524,7 @@ define(function(require) {
             var nBody = buffer[offset++];
             for (var i = 0; i < nBody; i++) {
                 var idx = buffer[offset++];
-                var collider = this._colliders[idx];
+                var collider = this._colliders.getAt(idx);
                 var body = collider.collisionObject;
 
                 var m = body.invInertiaTensorWorld._array;

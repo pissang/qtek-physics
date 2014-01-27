@@ -41,8 +41,11 @@ this.CMD_COLLISION_CALLBACK = 5;
 
 this.CMD_SYNC_INERTIA_TENSOR = 6;
 
-// Message of step
+// Step
 this.CMD_STEP = 10;
+// Ray test
+this.CMD_RAYTEST_CLOSEST = 11;
+this.CMD_RAYTEST_ALL = 12;
 
 // Shape types
 this.SHAPE_BOX = 0;

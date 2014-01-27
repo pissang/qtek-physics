@@ -7,7 +7,6 @@ define(function (require) {
         this._offset = 0;
     }
 
-
     Buffer.prototype.set = function(offset, value) {
         this._data[offset] = value;
     }

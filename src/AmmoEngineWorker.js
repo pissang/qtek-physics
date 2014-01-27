@@ -34,81 +34,23 @@ var g_collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
 var g_dispatcher = new Ammo.btCollisionDispatcher(g_collisionConfiguration);
 var g_solver = new Ammo.btSequentialImpulseConstraintSolver();
 var g_world = new Ammo.btDiscreteDynamicsWorld(g_dispatcher, g_broadphase, g_solver, g_collisionConfiguration);
+g_world.setGravity(new Ammo.btVector3(0, -10, 0));
 var g_ghostPairCallback = null;
-
-
-onmessage = function(e) {
-
-    var buffer = new Float32Array(e.data);
-    
-    var nChunk = buffer[0];
-
-    var offset = 1;
-    var haveStep = false;
-    var stepTime, maxSubSteps, fixedTimeStep;
-    var addedCollisonObjects = [];
-    for (var i = 0; i < nChunk; i++) {
-        var cmdType = buffer[offset++];
-        // Dispatch
-        switch(cmdType) {
-            case CMD_ADD_COLLIDER:
-                offset = cmd_AddCollisionObject(buffer, offset, addedCollisonObjects);
-                break;
-            case CMD_REMOVE_COLLIDER:
-                offset = cmd_RemoveCollisionObject(buffer, offset);
-                break;
-            case CMD_MOD_COLLIDER:
-                offset = cmd_ModCollisionObject(buffer, offset);
-                break;
-            case CMD_STEP:
-                haveStep = true;
-                stepTime = buffer[offset++];
-                maxSubSteps = buffer[offset++];
-                fixedTimeStep = buffer[offset++];
-                break;
-            default:
-        }
-    }
-
-    // Sync back inertia tensor
-    // Calculating torque needs this stuff
-    if (addedCollisonObjects.length > 0) { 
-        g_buffer.offset = 0;
-        g_buffer.packScalar(1); // nChunk
-        g_buffer.packScalar(CMD_SYNC_INERTIA_TENSOR);   // Command
-        g_buffer.packScalar(0); // nBody
-        var nBody = 0;
-        for (var i = 0; i < addedCollisonObjects.length; i++) {
-            var co = addedCollisonObjects[i];
-            var body = co.collisionObject;
-            if (body.getInvInertiaTensorWorld) {
-                var m3x3 = body.getInvInertiaTensorWorld();
-                g_buffer.packScalar(co.__idx__);
-                g_buffer.packMatrix3x3(m3x3);
-                nBody++;
-            }
-        }
-        g_buffer.array[2] = nBody;
-        var array = g_buffer.toFloat32Array();
-        postMessage(array.buffer, [array.buffer]);
-    }
-
-    g_buffer.offset = 0;
-    // Lazy execute
-    if (haveStep) {
-        cmd_Step(stepTime, maxSubSteps, fixedTimeStep);
-    }
-}
 
 /********************************************
             Buffer Object
  ********************************************/
 
-var g_buffer = {
+ function g_Buffer() {
 
-    array : [],
-    offset : 0,
+    this.array = [];
+    this.offset = 0;
+}
 
+g_Buffer.prototype = {
+
+    constructor : g_Buffer,
+    
     packScalar : function(scalar) {
         this.array[this.offset++] = scalar;
     },
@@ -140,6 +82,82 @@ var g_buffer = {
     toFloat32Array : function() {
         this.array.length = this.offset;
         return new Float32Array(this.array);
+    }
+}
+
+var g_stepBuffer = new g_Buffer();
+var g_inertiaTensorBuffer = new g_Buffer();
+var g_rayTestBuffer = new g_Buffer();
+
+
+/********************************************
+            Message Dispatcher
+ ********************************************/
+
+onmessage = function(e) {
+
+    var buffer = new Float32Array(e.data);
+    
+    var nChunk = buffer[0];
+
+    var offset = 1;
+    var haveStep = false;
+    var stepTime, maxSubSteps, fixedTimeStep;
+    var addedCollisonObjects = [];
+    for (var i = 0; i < nChunk; i++) {
+        var cmdType = buffer[offset++];
+        // Dispatch
+        switch(cmdType) {
+            case CMD_ADD_COLLIDER:
+                offset = cmd_AddCollisionObject(buffer, offset, addedCollisonObjects);
+                break;
+            case CMD_REMOVE_COLLIDER:
+                offset = cmd_RemoveCollisionObject(buffer, offset);
+                break;
+            case CMD_MOD_COLLIDER:
+                offset = cmd_ModCollisionObject(buffer, offset);
+                break;
+            case CMD_STEP:
+                haveStep = true;
+                stepTime = buffer[offset++];
+                maxSubSteps = buffer[offset++];
+                fixedTimeStep = buffer[offset++];
+                break;
+            case CMD_RAYTEST_ALL:
+            case CMD_RAYTEST_CLOSEST:
+                offset = cmd_Raytest(buffer, offset, cmdType === CMD_RAYTEST_CLOSEST);
+                break;
+            default:
+        }
+    }
+
+    // Sync back inertia tensor
+    // Calculating torque needs this stuff
+    if (addedCollisonObjects.length > 0) { 
+        g_inertiaTensorBuffer.offset = 0;
+        g_inertiaTensorBuffer.packScalar(1); // nChunk
+        g_inertiaTensorBuffer.packScalar(CMD_SYNC_INERTIA_TENSOR);   // Command
+        g_inertiaTensorBuffer.packScalar(0); // nBody
+        var nBody = 0;
+        for (var i = 0; i < addedCollisonObjects.length; i++) {
+            var co = addedCollisonObjects[i];
+            var body = co.collisionObject;
+            if (body.getInvInertiaTensorWorld) {
+                var m3x3 = body.getInvInertiaTensorWorld();
+                g_inertiaTensorBuffer.packScalar(co.__idx__);
+                g_inertiaTensorBuffer.packMatrix3x3(m3x3);
+                nBody++;
+            }
+        }
+        g_inertiaTensorBuffer.array[2] = nBody;
+        var array = g_inertiaTensorBuffer.toFloat32Array();
+        postMessage(array.buffer, [array.buffer]);
+    }
+
+    // Lazy execute
+    if (haveStep) {
+        g_stepBuffer.offset = 0;
+        cmd_Step(stepTime, maxSubSteps, fixedTimeStep);
     }
 }
 
@@ -284,6 +302,9 @@ function cmd_AddCollisionObject(buffer, offset, out) {
     var isGhostObject = COLLISION_FLAG_GHOST_OBJECT & collisionFlags;
     var hasCallback = COLLISION_FLAG_HAS_CALLBACK & collisionFlags;
 
+    var group = buffer[offset++];
+    var collisionMask = buffer[offset++];
+
     if (MOTION_STATE_MOD_BIT & bitMask) {
         var origin = new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset++]);
         var quat = new Ammo.btQuaternion(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);
@@ -374,7 +395,8 @@ function cmd_AddCollisionObject(buffer, offset, out) {
         physicsObject.hasCallback = hasCallback;
         g_objectsList[idx] = physicsObject;
         g_ammoPtrIdxMap[rigidBody.ptr] = idx;
-
+        // TODO
+        // g_world.addRigidBody(rigidBody, group, collisionMask);
         g_world.addRigidBody(rigidBody);
     } else {
         // TODO What's the difference of Pair Caching Ghost Object ?
@@ -386,6 +408,8 @@ function cmd_AddCollisionObject(buffer, offset, out) {
         physicsObject.hasCallback = hasCallback;
         physicsObject.isGhostObject = true;
         g_objectsList[idx] = physicsObject;
+        // TODO
+        // g_world.addCollisionObject(ghostObject, group, collisionMask);
         g_world.addCollisionObject(ghostObject);
 
         g_ammoPtrIdxMap[ghostObject.ptr] = idx;
@@ -502,13 +526,13 @@ function cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {
     var stepTime = new Date().getTime() - startTime;
 
     var nChunk = 3;
-    g_buffer.packScalar(nChunk);
+    g_stepBuffer.packScalar(nChunk);
 
     // Sync Motion State
-    g_buffer.packScalar(CMD_SYNC_MOTION_STATE);
+    g_stepBuffer.packScalar(CMD_SYNC_MOTION_STATE);
     var nObjects = 0;
-    var nObjectsOffset = g_buffer.offset;
-    g_buffer.packScalar(nObjects);
+    var nObjectsOffset = g_stepBuffer.offset;
+    g_stepBuffer.packScalar(nObjects);
 
     for (var i = 0; i < g_objectsList.length; i++) {
         var obj = g_objectsList[i];
@@ -520,24 +544,24 @@ function cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {
             continue;
         }
         // Idx
-        g_buffer.packScalar(i);
+        g_stepBuffer.packScalar(i);
         var motionState = collisionObject.getMotionState();
         motionState.getWorldTransform(obj.transform);
 
-        g_buffer.packVector3(obj.transform.getOrigin());
-        g_buffer.packVector4(obj.transform.getRotation());
+        g_stepBuffer.packVector3(obj.transform.getOrigin());
+        g_stepBuffer.packVector4(obj.transform.getRotation());
         nObjects++;
     }
-    g_buffer.array[nObjectsOffset] = nObjects;
+    g_stepBuffer.array[nObjectsOffset] = nObjects;
 
     // Return step time
-    g_buffer.packScalar(CMD_STEP_TIME);
-    g_buffer.packScalar(stepTime);
+    g_stepBuffer.packScalar(CMD_STEP_TIME);
+    g_stepBuffer.packScalar(stepTime);
 
     // Tick callback
     _tickCallback(g_world);
 
-    var array = g_buffer.toFloat32Array();
+    var array = g_stepBuffer.toFloat32Array();
 
     postMessage(array.buffer, [array.buffer]);
 }
@@ -545,12 +569,12 @@ function cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {
 // nmanifolds - [idxA - idxB - ncontacts - [pA - pB - normal]... ]...
 function _tickCallback(world) {
 
-    g_buffer.packScalar(CMD_COLLISION_CALLBACK);
+    g_stepBuffer.packScalar(CMD_COLLISION_CALLBACK);
 
     var nManifolds = g_dispatcher.getNumManifolds();
     var nCollision = 0;
-    var tickCmdOffset = g_buffer.offset;
-    g_buffer.packScalar(0);  //nManifolds place holder
+    var tickCmdOffset = g_stepBuffer.offset;
+    g_stepBuffer.packScalar(0);  //nManifolds place holder
 
     for (var i = 0; i < nManifolds; i++) {
         var contactManifold = g_dispatcher.getManifoldByIndexInternal(i);
@@ -567,7 +591,7 @@ function _tickCallback(world) {
             var obB = g_objectsList[obBIdx];
 
             if (obA.hasCallback || obB.hasCallback) {
-                var chunkStartOffset = g_buffer.offset;
+                var chunkStartOffset = g_stepBuffer.offset;
                 if (_packContactManifold(contactManifold, chunkStartOffset, obAIdx, obBIdx)) {
                     nCollision++;
                 }
@@ -575,12 +599,12 @@ function _tickCallback(world) {
         }
     }
 
-    g_buffer.array[tickCmdOffset] = nCollision;
+    g_stepBuffer.array[tickCmdOffset] = nCollision;
 }
 
 function _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {
     // place holder for idxA, idxB, nContacts
-    g_buffer.offset += 3;
+    g_stepBuffer.offset += 3;
     var nActualContacts = 0;
     var nContacts = contactManifold.getNumContacts();
     for (var j = 0; j < nContacts; j++) {
@@ -591,21 +615,60 @@ function _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {
             var pB = cp.getPositionWorldOnB();
             var normal = cp.get_m_normalWorldOnB();
 
-            g_buffer.packVector3(pA);
-            g_buffer.packVector3(pB);
-            g_buffer.packVector3(normal);
+            g_stepBuffer.packVector3(pA);
+            g_stepBuffer.packVector3(pB);
+            g_stepBuffer.packVector3(normal);
             nActualContacts++;
         }
     }
 
     if (nActualContacts > 0) {
-        g_buffer.array[offset] = obAIdx;
-        g_buffer.array[offset+1] = obBIdx;
-        g_buffer.array[offset+2] = nActualContacts;
+        g_stepBuffer.array[offset] = obAIdx;
+        g_stepBuffer.array[offset+1] = obBIdx;
+        g_stepBuffer.array[offset+2] = nActualContacts;
 
         return true;
     } else {
-        g_buffer.offset -= 3;
+        g_stepBuffer.offset -= 3;
         return false;
     }
+}
+
+var rayStart = new Ammo.btVector3();
+var rayEnd = new Ammo.btVector3();
+function cmd_Raytest(buffer, offset, isClosest) {
+    var cbIdx = buffer[offset++];
+    rayStart.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);
+    rayEnd.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);
+
+    g_rayTestBuffer.offset = 0;
+    g_rayTestBuffer.packScalar(1);
+    g_rayTestBuffer.packScalar(isClosest ? CMD_RAYTEST_CLOSEST : CMD_RAYTEST_ALL);
+    g_rayTestBuffer.packScalar(cbIdx);
+
+    if (isClosest) {
+        var callback = new Module.ClosestRayResultCallback(rayStart, rayEnd);
+        var colliderIdx = -1;
+        g_world.rayTest(rayStart, rayEnd, callback);
+        if (callback.hasHit()) {
+            var co = callback.get_m_collisionObject();
+            colliderIdx = g_ammoPtrIdxMap[co.ptr];
+            g_rayTestBuffer.packScalar(colliderIdx);
+            // hit point
+            g_rayTestBuffer.packVector3(callback.get_m_hitPointWorld());
+            // hit normal
+            g_rayTestBuffer.packVector3(callback.get_m_hitNormalWorld());
+        }
+
+        var array = g_rayTestBuffer.toFloat32Array();
+        postMessage(array.buffer, [array.buffer]);
+    } else {
+        var callback = new Module.AllHitsRayResultCallback(rayStart, rayEnd);
+        g_world.rayTest(rayStart, rayEnd, callback);
+        if (callback.hasHit()) {
+            // TODO
+        }
+    }
+
+    return offset;
 }

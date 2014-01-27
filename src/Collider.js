@@ -18,6 +18,12 @@ define(function(require) {
 
         isGhostObject : false,
 
+        // Group and collision masks
+        // http://bulletphysics.org/mediawiki-1.5.8/index.php/Collision_Filtering#Filtering_collisions_using_masks
+        group : 1,
+
+        collisionMask : 1,
+
         _dirty : true,
 
         _collisionHasCallback : false
