@@ -55,7 +55,7 @@
                 planeMesh.rotation.rotateX(-Math.PI / 2);
 
                 var floorBody = new qtekPhysics.RigidBody({
-                    shape : new qtekPhysics.StaticPlaneShape()
+                    shape : new qtekPhysics.shape.StaticPlane()
                 });
                 engine.addCollider(new qtekPhysics.Collider({
                     collisionObject : floorBody,
@@ -68,7 +68,7 @@
                             Cube
                  ****************************/
                 var cubeGeo = new qtek.geometry.Cube();
-                var boxShape = new qtekPhysics.BoxShape({
+                var boxShape = new qtekPhysics.shape.Box({
                     halfExtents : new qtek.math.Vector3(1, 1, 1)
                 });
                 for (var i = 0; i < 100; i++) {
@@ -95,7 +95,7 @@
                 /****************************
                         Convex Hull
                  ****************************/
-                var convexShape = new qtekPhysics.ConvexHullShape({
+                var convexShape = new qtekPhysics.shape.ConvexHull({
                     geometry : new qtek.geometry.Cylinder({
                         capSegments : 8,
                         height : 1.2,

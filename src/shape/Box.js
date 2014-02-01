@@ -2,7 +2,7 @@ define(function(require) {
 
     'use strict';
     
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
     var Vector3 = require('qtek/math/Vector3');
 
     var BoxShape = Shape.derive({

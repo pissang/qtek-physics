@@ -2,10 +2,10 @@ define(function (require) {
     
     'use strict';
     
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
     var Vector3 = require('qtek/math/Vector3');
 
-    var CapsuleShape = Shape.derive({
+    var ConeShape = Shape.derive({
 
         _radius : 1,
         
@@ -14,7 +14,7 @@ define(function (require) {
         _dirty : true
     });
 
-    Object.defineProperty(CapsuleShape.prototype, 'radius', {
+    Object.defineProperty(ConeShape.prototype, 'radius', {
         get : function() {
             return this._radius;
         },
@@ -23,8 +23,7 @@ define(function (require) {
             this._dirty = true;
         }
     });
-
-    Object.defineProperty(CapsuleShape.prototype, 'height', {
+    Object.defineProperty(ConeShape.prototype, 'height', {
         get : function() {
             return this._height;
         },
@@ -32,17 +31,7 @@ define(function (require) {
             this._height = value;
             this._dirty = true;
         }
-    })
-
-    Object.defineProperty(CapsuleShape.prototype, 'halfHeight', {
-        get : function() {
-            return this._height / 2;
-        },
-        set : function(value) {
-            this._height = value * 2;
-            this._dirty = true;
-        }
     });
 
-    return CapsuleShape;
+    return ConeShape;
 })

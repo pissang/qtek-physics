@@ -27,7 +27,7 @@
                 var camera = new qtek.camera.Perspective({
                     aspect : renderer.width / renderer.height
                 });
-                camera.position.set(0, 5, 10);
+                camera.position.set(0, 10, 20);
                 camera.lookAt(qtek.math.Vector3.ZERO);
 
                 var light = new qtek.light.Directional({
@@ -54,7 +54,7 @@
                 planeMesh.rotation.rotateX(-Math.PI / 2);
 
                 var floorBody = new qtekPhysics.RigidBody({
-                    shape : new qtekPhysics.StaticPlaneShape()
+                    shape : new qtekPhysics.shape.StaticPlane()
                 });
                 engine.addCollider(new qtekPhysics.Collider({
                     collisionObject : floorBody,
@@ -70,7 +70,7 @@
                 var loader = new qtek.loader.GLTF();
                 loader.load('assets/prop_barrel.json');
 
-                var barrelShape = new qtekPhysics.ConvexHullShape({
+                var barrelShape = new qtekPhysics.shape.ConvexHull({
                     geometry : new qtek.geometry.Cylinder({
                         capSegments : 8,
                         height : 1.2,
@@ -132,7 +132,7 @@
                     mesh.material.set('glossiness', 0.2);
 
                     var body = new qtekPhysics.RigidBody({
-                        shape : new qtekPhysics.BvhTriangleMeshShape({
+                        shape : new qtekPhysics.shape.BvhTriangleMesh({
                             geometry : geo
                         }),
                         mass : 1

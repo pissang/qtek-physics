@@ -7,15 +7,15 @@ define(function(require) {
     var Base = require('qtek/core/Base');
     var configStr = require('text!./AmmoEngineConfig.js');
 
-    var BoxShape = require('./BoxShape');
-    var CapsuleShape = require('./CapsuleShape');
-    var ConeShape = require('./ConeShape');
-    var CylinderShape = require('./CylinderShape');
-    var SphereShape = require('./SphereShape');
-    var StaticPlaneShape = require('./StaticPlaneShape');
-    var ConvexTriangleMeshShape = require('./ConvexTriangleMeshShape');
-    var BvhTriangleMeshShape = require('./BvhTriangleMeshShape');
-    var ConvexHullShape = require('./ConvexHullShape');
+    var BoxShape = require('./shape/Box');
+    var CapsuleShape = require('./shape/Capsule');
+    var ConeShape = require('./shape/Cone');
+    var CylinderShape = require('./shape/Cylinder');
+    var SphereShape = require('./shape/Sphere');
+    var StaticPlaneShape = require('./shape/StaticPlane');
+    var ConvexTriangleMeshShape = require('./shape/ConvexTriangleMesh');
+    var BvhTriangleMeshShape = require('./shape/BvhTriangleMesh');
+    var ConvexHullShape = require('./shape/ConvexHull');
     var QBuffer  = require('./Buffer');
     var QPool = require('./Pool');
     var ContactPoint = require('./ContactPoint');
@@ -60,13 +60,12 @@ define(function(require) {
 
         init : function() {
             this._engineWorker = new Worker(this.workerUrl);
-            
 
             var self = this;
 
             this._engineWorker.onmessage = function(e) {
                 var buffer = new Float32Array(e.data);
-        
+
                 var nChunk = buffer[0];
                 var offset = 1;
                 for (var i = 0; i < nChunk; i++) {

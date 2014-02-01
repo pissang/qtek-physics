@@ -4,15 +4,15 @@ define(function(require) {
     var Collider = require('Collider');
     var RigidBody = require('RigidBody');
     var GhostObject = require('GhostObject');
-    var BoxShape = require('BoxShape');
-    var SphereShape = require('SphereShape');
-    var CylinderShape = require('CylinderShape');
-    var CapsuleShape = require('CapsuleShape');
-    var ConeShape = require('ConeShape');
-    var ConvexTriangleMeshShape = require('ConvexTriangleMeshShape');
-    var BvhTriangleMeshShape = require('BvhTriangleMeshShape');
-    var ConvexHullShape = require('ConvexHullShape');
-    var StaticPlaneShape = require('StaticPlaneShape');
+    var BoxShape = require('shape/Box');
+    var SphereShape = require('shape/Sphere');
+    var CylinderShape = require('shape/Cylinder');
+    var CapsuleShape = require('shape/Capsule');
+    var ConeShape = require('shape/Cone');
+    var ConvexTriangleMeshShape = require('shape/ConvexTriangleMesh');
+    var BvhTriangleMeshShape = require('shape/BvhTriangleMesh');
+    var ConvexHullShape = require('shape/ConvexHull');
+    var StaticPlaneShape = require('shape/StaticPlane');
     var PhysicsMaterial = require("Material");
 
     var qtek = require('qtek/qtek');
@@ -24,8 +24,7 @@ define(function(require) {
         canvas : document.getElementById('Main')
     });
     var shadowMapPass = new qtek.prePass.ShadowMap({
-        // softShadow : qtek.prePass.ShadowMap.VSM
-        // shadowCascade : 3
+        shadowCascade : 3,
     });
     renderer.resize(window.innerWidth, window.innerHeight);
     
@@ -40,7 +39,7 @@ define(function(require) {
     camera.lookAt(qtek.math.Vector3.ZERO);
 
     var light = new qtek.light.Directional({
-        shadowResolution : 2048,
+        shadowResolution : 1024,
         shadowBias : 0.005
     });
     light.position.set(1, 2, 1);
@@ -317,7 +316,7 @@ define(function(require) {
     });
     animation.on('frame', function(dTime) {
         control.update(dTime);
-        // shadowMapPass.render(renderer, scene, camera);
+        shadowMapPass.render(renderer, scene, camera);
         renderer.render(scene, camera);
     });
 
