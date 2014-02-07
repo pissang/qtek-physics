@@ -17,9 +17,7 @@ define(function(require) {
 
     var qtek = require('qtek/qtek');
 
-    var engine = new Engine({
-        workerUrl : '../src/AmmoEngineWorker'
-    });
+    var engine = new Engine();
     var renderer = new qtek.Renderer({
         canvas : document.getElementById('Main')
     });

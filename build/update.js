@@ -6,7 +6,7 @@ var OUTPUT_PORTAL = "qtek-physics.js";
 
 var template = fs.readFileSync("qtek_physics_tpl.js", "utf-8")
 
-var ignoreList = ['AmmoEngineWorker.js', 'AmmoEngineConfig.js'];
+var ignoreList = ['AmmoEngineWorker.js', 'AmmoEngineConfig.js', 'thirdparty/'];
 
 glob("**/*.js", {
     cwd : ROOT
@@ -17,7 +17,9 @@ glob("**/*.js", {
     files.forEach(function(file){
         if(file.match(/qtek-physics.*?\.js/) || file === "text.js"){
             return;
-        } else if (ignoreList.indexOf(file) >= 0) {
+        } else if (
+            ignoreList.filter(function(item) {return file.match(item);}).length > 0
+        ) {
             return;
         }
         var filePathWithOutExt = file.slice(0, -3);

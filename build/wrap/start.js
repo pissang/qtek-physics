@@ -4,7 +4,7 @@
         define( ["exports"], factory);
     // No module loader
     } else {
-        factory(window.qtek);
+        factory(window.qtek.physics = {});
     }
 
-})(function(qtek){
+})(function(_exports){

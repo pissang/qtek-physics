@@ -6,6 +6,12 @@ define(function(require) {
 
     var Base = require('qtek/core/Base');
     var configStr = require('text!./AmmoEngineConfig.js');
+    // Using inline web worker
+    // http://www.html5rocks.com/en/tutorials/workers/basics/#toc-inlineworkers
+    // Put the script together instead of using importScripts
+    var workerScript = require('text!./AmmoEngineWorker.js');
+    var ammoScript = require('text!./thirdparty/ammo.fast.js');
+    var finalWorkerScript = [ammoScript, configStr, workerScript].join('\n');
 
     var BoxShape = require('./shape/Box');
     var CapsuleShape = require('./shape/Capsule');
@@ -23,14 +29,11 @@ define(function(require) {
     var Vector3 = require('qtek/math/Vector3');
 
     var ConfigCtor = new Function(configStr);
-
     var config = new ConfigCtor();
 
     var Engine = Base.derive(function() {
 
         return {
-            workerUrl : '',
-
             maxSubSteps : 3,
 
             fixedTimeStep : 1 / 60,
@@ -59,7 +62,9 @@ define(function(require) {
     }, {
 
         init : function() {
-            this._engineWorker = new Worker(this.workerUrl);
+            var workerBlob = new Blob([finalWorkerScript]);
+            var workerBlobUrl = window.URL.createObjectURL(workerBlob);
+            this._engineWorker = new Worker(workerBlobUrl);
 
             var self = this;
 

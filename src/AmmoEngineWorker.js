@@ -1,9 +1,7 @@
 'use strict';
 
-
-importScripts('./AmmoEngineConfig.js');
-importScripts('../lib/ammo.fast.js');
-
+// importScripts('./AmmoEngineConfig.js');
+// importScripts('../lib/ammo.fast.js');
 
 /********************************************
             Global Objects
@@ -242,7 +240,7 @@ function _createShape(buffer, offset) {
                     Ammo.setValue(pointsPtr + i * 4, points[i], 'float');
                 }
 
-                shape = new btConvexHullShape(pointsPtr, nPoints, stride);
+                shape = new Ammo.btConvexHullShape(pointsPtr, nPoints, stride);
                 break;
             case SHAPE_STATIC_PLANE:
                 var normal = _unPackVector3(buffer, offset);

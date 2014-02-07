@@ -13,9 +13,7 @@
                 'qtek-physics'
             ], function(qtek, qtekPhysics) {
 
-                var engine = new qtekPhysics.Engine({
-                    workerUrl : '../src/AmmoEngineWorker'
-                });
+                var engine = new qtekPhysics.Engine();
                 var renderer = new qtek.Renderer({
                     canvas : document.getElementById('Main')
                 });

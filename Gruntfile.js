@@ -1,7 +1,7 @@
 var glob = require('glob');
 var fs = require('fs');
 
-var ignoreList = ['AmmoEngineWorker.js', 'AmmoEngineConfig.js'];
+var ignoreList = ['AmmoEngineWorker.js', 'AmmoEngineConfig.js', 'thirdparty/'];
 
 module.exports = function(grunt){
 
@@ -100,9 +100,11 @@ module.exports = function(grunt){
             cwd : './src'
         }, function(err, files){
             files.forEach(function(file){
-                if( file.match(/qtek-physics.*?\.js/) || file === "text.js"){
+                if(file.match(/qtek-physics.*?\.js/) || file === "text.js"){
                     return;
-                } else if (ignoreList.indexOf(file) >= 0) {
+                } else if (
+                    ignoreList.filter(function(item) {return file.match(item)}).length > 0
+                ) {
                     return;
                 }
                 includeList.push('qtek/physics/' + file.replace(/\.js$/, ''));
