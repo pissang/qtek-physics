@@ -12,7 +12,9 @@
                 'qtek/qtek',
                 'qtek-physics'
             ], function(qtek, qtekPhysics) {
-                var engine = new qtekPhysics.Engine();
+                var engine = new qtekPhysics.Engine({
+                    ammoUrl : '../lib/ammo.fast.js'
+                });
                 var renderer = new qtek.Renderer({
                     canvas : document.getElementById('Main')
                 });

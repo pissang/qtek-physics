@@ -5,13 +5,17 @@ define(function(require) {
     'use strict';
 
     var Base = require('qtek/core/Base');
+    var util = require('qtek/core/util');
     var configStr = require('text!./AmmoEngineConfig.js');
     // Using inline web worker
     // http://www.html5rocks.com/en/tutorials/workers/basics/#toc-inlineworkers
     // Put the script together instead of using importScripts
     var workerScript = require('text!./AmmoEngineWorker.js');
-    var ammoScript = require('text!./thirdparty/ammo.fast.js');
-    var finalWorkerScript = [ammoScript, configStr, workerScript].join('\n');
+    var finalWorkerScript = [configStr, workerScript].join('\n');
+    var workerBlob = new Blob([finalWorkerScript]);
+    // Undefine the module and release the memory
+    finalWorkerScript = null;
+    workerScript = null;
 
     var BoxShape = require('./shape/Box');
     var CapsuleShape = require('./shape/Capsule');
@@ -34,12 +38,18 @@ define(function(require) {
     var Engine = Base.derive(function() {
 
         return {
+
+            ammoUrl : '',
+
+            gravity : new Vector3(0, -10, 0),
+
             maxSubSteps : 3,
 
             fixedTimeStep : 1 / 60,
 
             _stepTime : 0,
 
+            _isWorkerInited : true,
             _isWorkerFree : true,
             _accumalatedTime : 0,
 
@@ -62,13 +72,24 @@ define(function(require) {
     }, {
 
         init : function() {
-            var workerBlob = new Blob([finalWorkerScript]);
             var workerBlobUrl = window.URL.createObjectURL(workerBlob);
             this._engineWorker = new Worker(workerBlobUrl);
+            // TODO more robust
+            var ammoUrl = util.relative2absolute(this.ammoUrl, window.location.href.split('/').slice(0, -1).join('/'));
+            this._engineWorker.postMessage({
+                __init__ : true,
+                ammoUrl : ammoUrl,
+                gravity : [this.gravity.x, this.gravity.y, this.gravity.z]
+            });
 
             var self = this;
 
             this._engineWorker.onmessage = function(e) {
+                if (e.data.__init__) {
+                    this._isWorkerInited = true;
+                    return;
+                }
+
                 var buffer = new Float32Array(e.data);
 
                 var nChunk = buffer[0];
@@ -105,6 +126,9 @@ define(function(require) {
         },
 
         step : function(timeStep) {
+            if (!this._isWorkerInited) {
+                return;
+            }
             // Wait until the worker is free to use
             if (!this._isWorkerFree) {
                 this._accumalatedTime += timeStep;

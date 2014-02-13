@@ -55,7 +55,7 @@ module.exports = function(grunt){
                 main : 'qtek-physics'
             }];
             common.wrap = {
-                'startFile' : ['build/wrap/start.js', 'build/almond.js'],
+                'startFile' : ['build/wrap/start.js', 'build/almond-mod.js'],
                 'endFile' : 'build/wrap/end.js'
             }
         }

@@ -32,14 +32,15 @@
 //      timeStep(1)
 //      maxSubSteps(1)
 //      fixedTimeStep(1)
-this.CMD_ADD_COLLIDER = 0;
-this.CMD_REMOVE_COLLIDER = 1;
-this.CMD_MOD_COLLIDER = 2;
-this.CMD_SYNC_MOTION_STATE = 3;
-this.CMD_STEP_TIME = 4;
-this.CMD_COLLISION_CALLBACK = 5;
 
-this.CMD_SYNC_INERTIA_TENSOR = 6;
+this.CMD_ADD_COLLIDER = 1;
+this.CMD_REMOVE_COLLIDER = 2;
+this.CMD_MOD_COLLIDER = 3;
+this.CMD_SYNC_MOTION_STATE = 4;
+this.CMD_STEP_TIME = 5;
+this.CMD_COLLISION_CALLBACK = 6;
+
+this.CMD_SYNC_INERTIA_TENSOR = 7;
 
 // Step
 this.CMD_STEP = 10;

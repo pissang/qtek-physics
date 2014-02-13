@@ -1,7 +1,7 @@
 'use strict';
 
+// TODO
 // importScripts('./AmmoEngineConfig.js');
-// importScripts('../lib/ammo.fast.js');
 
 /********************************************
             Global Objects
@@ -26,13 +26,9 @@ var g_shapes = {};
 // Map to store the ammo objects which key is the ptr of body
 var g_ammoPtrIdxMap = {};
 
-// Init
-var g_broadphase = new Ammo.btDbvtBroadphase();
-var g_collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
-var g_dispatcher = new Ammo.btCollisionDispatcher(g_collisionConfiguration);
-var g_solver = new Ammo.btSequentialImpulseConstraintSolver();
-var g_world = new Ammo.btDiscreteDynamicsWorld(g_dispatcher, g_broadphase, g_solver, g_collisionConfiguration);
-g_world.setGravity(new Ammo.btVector3(0, -10, 0));
+// World objects
+var g_dispatcher = null;
+var g_world = null;
 var g_ghostPairCallback = null;
 
 /********************************************
@@ -93,6 +89,11 @@ var g_rayTestBuffer = new g_Buffer();
  ********************************************/
 
 onmessage = function(e) {
+    // Init the word
+    if (e.data.__init__) {
+        cmd_InitAmmo(e.data.ammoUrl, e.data.gravity);
+        return;
+    }
 
     var buffer = new Float32Array(e.data);
     
@@ -291,6 +292,24 @@ function _createShape(buffer, offset) {
 /********************************************
                 COMMANDS
  ********************************************/
+
+function cmd_InitAmmo(ammoUrl, gravity) {
+    importScripts(ammoUrl);
+    if (!gravity) {
+        gravity = [0, -10, 0];
+    }
+
+    var broadphase = new Ammo.btDbvtBroadphase();
+    var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+    g_dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
+    var solver = new Ammo.btSequentialImpulseConstraintSolver();
+    g_world = new Ammo.btDiscreteDynamicsWorld(g_dispatcher, broadphase, solver, collisionConfiguration);
+    g_world.setGravity(new Ammo.btVector3(gravity[0], gravity[1], gravity[2]));
+
+    postMessage({
+        __init__ : true
+    });
+}
 
 function cmd_AddCollisionObject(buffer, offset, out) {
     var idx = buffer[offset++];
@@ -632,9 +651,13 @@ function _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {
     }
 }
 
-var rayStart = new Ammo.btVector3();
-var rayEnd = new Ammo.btVector3();
+var rayStart = null;
+var rayEnd = null;
 function cmd_Raytest(buffer, offset, isClosest) {
+    if (!rayStart) {
+        rayStart = new Ammo.btVector3();
+        rayEnd = new Ammo.btVector3();
+    }
     var cbIdx = buffer[offset++];
     rayStart.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);
     rayEnd.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);

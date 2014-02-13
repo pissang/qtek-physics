@@ -17,7 +17,9 @@ define(function(require) {
 
     var qtek = require('qtek/qtek');
 
-    var engine = new Engine();
+    var engine = new Engine({
+        ammoUrl : '../lib/ammo.fast.js'
+    });
     var renderer = new qtek.Renderer({
         canvas : document.getElementById('Main')
     });

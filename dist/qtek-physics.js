@@ -4,10 +4,10 @@
         define( ["exports"], factory);
     // No module loader
     } else {
-        factory(window.qtek);
+        factory(window.qtek.physics = {});
     }
 
-})(function(qtek){
+})(function(_exports){
 
 /**
  * almond 0.2.5 Copyright (c) 2011-2012, The Dojo Foundation All Rights Reserved.
@@ -393,7 +393,7 @@ var requirejs, require, define;
         }
         return req;
     };
-
+    
     define = function (name, deps, callback) {
 
         //This module may not have dependencies
@@ -415,6 +415,67 @@ var requirejs, require, define;
     };
 }());
 
+define('qtek/physics/Buffer',['require'],function (require) {
+    
+    
+    
+    var Buffer = function() {
+        this._data = [];
+        this._offset = 0;
+    }
+
+    Buffer.prototype.set = function(offset, value) {
+        this._data[offset] = value;
+    }
+
+    Buffer.prototype.setOffset = function(offset) {
+        this._offset = offset;
+    }
+
+    Buffer.prototype.toFloat32Array = function() {
+        this._data.length = this._offset;
+        return new Float32Array(this._data);
+    }
+
+    Buffer.prototype.reset = function() {
+        this._data = [];
+        this._offset = 0;
+    }
+
+    Buffer.prototype.packScalar = function(scalar) {
+        this._data[this._offset++] = scalar;
+    }
+
+    Buffer.prototype.packVector2 = function(v2) {
+        this._data[this._offset++] = v2._array[0];
+        this._data[this._offset++] = v2._array[1];
+    }
+    
+    Buffer.prototype.packVector3 = function(v3) {
+        this._data[this._offset++] = v3._array[0];
+        this._data[this._offset++] = v3._array[1];
+        this._data[this._offset++] = v3._array[2];
+    }
+
+    Buffer.prototype.packVector4 = function(v4) {
+        this._data[this._offset++] = v4._array[0];
+        this._data[this._offset++] = v4._array[1];
+        this._data[this._offset++] = v4._array[2];
+        this._data[this._offset++] = v4._array[3];
+    }
+
+    Buffer.prototype.packArray = function(arr) {
+        for (var i = 0; i < arr.length; i++) {
+            this._data[this._offset++] = arr[i];
+        }
+    }
+
+    Buffer.prototype.packValues = function() {
+        this.packArray(arguments);
+    }
+
+    return Buffer;
+});
 define('qtek/core/mixin/derive',['require'],function(require) {
 
 
@@ -805,20 +866,55 @@ define('qtek/core/Base',['require','./mixin/derive','./mixin/notifier','./util']
 
     return Base;
 });
-define('qtek/physics/Shape',['require','qtek/core/Base'],function(require) {
-
+define('qtek/physics/Collider',['require','qtek/core/Base'],function(require) {
+    
     
     
     var Base = require('qtek/core/Base');
 
-    var Shape = Base.derive({
+    var Collider = Base.derive({
+
+        collisionObject : null,
+
+        sceneNode : null,
+
+        physicsMaterial : null,
+
+        isKinematic : false,
+
+        isStatic : false,
+
+        isGhostObject : false,
+
+        // Group and collision masks
+        // http://bulletphysics.org/mediawiki-1.5.8/index.php/Collision_Filtering#Filtering_collisions_using_masks
+        group : 1,
+
+        collisionMask : 1,
+
+        _dirty : true,
+
+        _collisionHasCallback : false
     }, {
-        dirty : function() {
+
+        on : function(name, action, context) {
+            Base.prototype.on.call(this, name, action, context);
+            this._collisionHasCallback = true;
             this._dirty = true;
+        },
+
+        off : function(name, action) {
+            Base.prototype.off.call(this, name, action);
+        },
+
+        hasCollisionCallback : function() {
+            return this._collisionHasCallback;
         }
     });
 
-    return Shape;
+    Collider.events = ['collision'];
+
+    return Collider;
 });
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
@@ -5166,7 +5262,27 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             vec3.transformQuat(this._array, this._array, q._array);
             this._dirty = true;
             return this;
-        },     
+        },
+
+        applyProjection : function(m) {
+            var v = this._array;
+            m = m._array;
+
+            // Perspective projection
+            if (m[15] === 0) {
+                var w = -1 / v[2];
+                v[0] = m[0] * v[0] * w;
+                v[1] = m[5] * v[1] * w;
+                v[2] = (m[10] * v[2] + m[14]) * w;
+            } else {
+                v[0] = m[0] * v[0] + m[12];
+                v[1] = m[5] * v[1] + m[13];
+                v[2] = m[10] * v[2] + m[14];
+            }
+            this._dirty = true;
+
+            return this;
+        },
         /**
          * Set euler angle from queternion
          */
@@ -5203,11 +5319,45 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
 
     return Vector3;
 } );
-define('qtek/physics/BoxShape',['require','./Shape','qtek/math/Vector3'],function(require) {
+define('qtek/physics/ContactPoint',['require','qtek/math/Vector3'],function(contactPoint) {
+
+    var Vector3 = require('qtek/math/Vector3');
+
+    var ContactPoint = function() {
+        this.thisPoint = new Vector3();
+        this.otherPoint = new Vector3();
+
+        this.otherCollider = null;
+        this.thisCollider = null;
+
+        this.normal = new Vector3(); // normal
+    }
+
+    return ContactPoint;
+});
+define('qtek/physics/AmmoEngineConfig.js',[],function () { return '\'use strict\';\n\n// Data format\n// Command are transferred in batches\n// ncmd - [cmd chunk][cmd chunk]...\n// Add rigid body :\n//      ------header------ \n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//          But because it is stored in Float, so it can only use at most 24 bit (TODO)\n//      -------body-------\n//      collision flag(1)\n//      ...\n//      collision shape guid(1)\n//      shape type(1)\n//      ...\n// Remove rigid body:\n//      cmdtype(1)\n//      idx(1)\n//      \n// Mod rigid body :\n//      ------header------\n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//      -------body-------\n//      ...\n//      \n// Step\n//      cmdtype(1)\n//      timeStep(1)\n//      maxSubSteps(1)\n//      fixedTimeStep(1)\n\nthis.CMD_ADD_COLLIDER = 1;\nthis.CMD_REMOVE_COLLIDER = 2;\nthis.CMD_MOD_COLLIDER = 3;\nthis.CMD_SYNC_MOTION_STATE = 4;\nthis.CMD_STEP_TIME = 5;\nthis.CMD_COLLISION_CALLBACK = 6;\n\nthis.CMD_SYNC_INERTIA_TENSOR = 7;\n\n// Step\nthis.CMD_STEP = 10;\n// Ray test\nthis.CMD_RAYTEST_CLOSEST = 11;\nthis.CMD_RAYTEST_ALL = 12;\n\n// Shape types\nthis.SHAPE_BOX = 0;\nthis.SHAPE_SPHERE = 1;\nthis.SHAPE_CYLINDER = 2;\nthis.SHAPE_CONE = 3;\nthis.SHAPE_CAPSULE = 4;\nthis.SHAPE_CONVEX_TRIANGLE_MESH = 5;\nthis.SHAPE_CONVEX_HULL = 6;\nthis.SHAPE_STATIC_PLANE = 7;\nthis.SHAPE_BVH_TRIANGLE_MESH = 8;\n\n// Rigid Body properties and bit mask\n// 1. Property name\n// 2. Property size\n// 3. Mod bit mask, to check if part of rigid body needs update\nthis.RIGID_BODY_PROPS = [\n    [\'linearVelocity\', 3, 0x1],\n    [\'angularVelocity\', 3, 0x2],\n    [\'linearFactor\', 3, 0x4],\n    [\'angularFactor\', 3, 0x8],\n    [\'centerOfMass\', 3, 0x10],\n    [\'localInertia\', 3, 0x20],\n    [\'massAndDamping\', 3, 0x40],\n    [\'totalForce\', 3, 0x80],\n    [\'totalTorque\', 3, 0x100]\n];\n\nthis.RIGID_BODY_PROP_MOD_BIT = {};\nthis.RIGID_BODY_PROPS.forEach(function(item) {\n    this.RIGID_BODY_PROP_MOD_BIT[item[0]] = item[2];\n}, this);\n\nthis.SHAPE_MOD_BIT = 0x200;\nthis.MATERIAL_MOD_BIT = 0x400;\nthis.COLLISION_FLAG_MOD_BIT = 0x800;\n\nthis.MOTION_STATE_MOD_BIT = 0x1000;\n\nthis.MATERIAL_PROPS = [\n    [\'friction\', 1],\n    [\'bounciness\', 1],\n];\n\n// Collision Flags\nthis.COLLISION_FLAG_STATIC = 0x1;\nthis.COLLISION_FLAG_KINEMATIC = 0x2;\nthis.COLLISION_FLAG_GHOST_OBJECT = 0x4;\n\nthis.COLLISION_FLAG_HAS_CALLBACK = 0x200;\n\n// Collision Status\nthis.COLLISION_STATUS_ENTER = 1;\nthis.COLLISION_STATUS_STAY = 2;\nthis.COLLISION_STATUS_LEAVE = 3;\n';});
+
+define('qtek/physics/AmmoEngineWorker.js',[],function () { return '\'use strict\';\n\n// TODO\n// importScripts(\'./AmmoEngineConfig.js\');\n\n/********************************************\n            Global Objects\n ********************************************/\n\nfunction PhysicsObject(collisionObject, transform) {\n\n    this.__idx__ = 0;\n\n    this.collisionObject = collisionObject || null;\n    this.transform = transform || null;\n\n    this.collisionStatus = [];\n\n    this.isGhostObject = false;\n    this.hasCallback = false;\n}\n\nvar g_objectsList = [];\nvar g_shapes = {};\n    \n// Map to store the ammo objects which key is the ptr of body\nvar g_ammoPtrIdxMap = {};\n\n// World objects\nvar g_dispatcher = null;\nvar g_world = null;\nvar g_ghostPairCallback = null;\n\n/********************************************\n            Buffer Object\n ********************************************/\n\n function g_Buffer() {\n\n    this.array = [];\n    this.offset = 0;\n}\n\ng_Buffer.prototype = {\n\n    constructor : g_Buffer,\n    \n    packScalar : function(scalar) {\n        this.array[this.offset++] = scalar;\n    },\n\n    packVector2 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n    },\n\n    packVector3 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n        this.array[this.offset++] = vector.getZ();\n    },\n\n    packVector4 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n        this.array[this.offset++] = vector.getZ();\n        this.array[this.offset++] = vector.getW();\n    },\n\n    packMatrix3x3 : function(m3x3) {\n        this.packVector3(m3x3.getColumn(0));\n        this.packVector3(m3x3.getColumn(1));\n        this.packVector3(m3x3.getColumn(2));\n    },\n\n    toFloat32Array : function() {\n        this.array.length = this.offset;\n        return new Float32Array(this.array);\n    }\n}\n\nvar g_stepBuffer = new g_Buffer();\nvar g_inertiaTensorBuffer = new g_Buffer();\nvar g_rayTestBuffer = new g_Buffer();\n\n\n/********************************************\n            Message Dispatcher\n ********************************************/\n\nonmessage = function(e) {\n    // Init the word\n    if (e.data.__init__) {\n        cmd_InitAmmo(e.data.ammoUrl, e.data.gravity);\n        return;\n    }\n\n    var buffer = new Float32Array(e.data);\n    \n    var nChunk = buffer[0];\n\n    var offset = 1;\n    var haveStep = false;\n    var stepTime, maxSubSteps, fixedTimeStep;\n    var addedCollisonObjects = [];\n    for (var i = 0; i < nChunk; i++) {\n        var cmdType = buffer[offset++];\n        // Dispatch\n        switch(cmdType) {\n            case CMD_ADD_COLLIDER:\n                offset = cmd_AddCollisionObject(buffer, offset, addedCollisonObjects);\n                break;\n            case CMD_REMOVE_COLLIDER:\n                offset = cmd_RemoveCollisionObject(buffer, offset);\n                break;\n            case CMD_MOD_COLLIDER:\n                offset = cmd_ModCollisionObject(buffer, offset);\n                break;\n            case CMD_STEP:\n                haveStep = true;\n                stepTime = buffer[offset++];\n                maxSubSteps = buffer[offset++];\n                fixedTimeStep = buffer[offset++];\n                break;\n            case CMD_RAYTEST_ALL:\n            case CMD_RAYTEST_CLOSEST:\n                offset = cmd_Raytest(buffer, offset, cmdType === CMD_RAYTEST_CLOSEST);\n                break;\n            default:\n        }\n    }\n\n    // Sync back inertia tensor\n    // Calculating torque needs this stuff\n    if (addedCollisonObjects.length > 0) { \n        g_inertiaTensorBuffer.offset = 0;\n        g_inertiaTensorBuffer.packScalar(1); // nChunk\n        g_inertiaTensorBuffer.packScalar(CMD_SYNC_INERTIA_TENSOR);   // Command\n        g_inertiaTensorBuffer.packScalar(0); // nBody\n        var nBody = 0;\n        for (var i = 0; i < addedCollisonObjects.length; i++) {\n            var co = addedCollisonObjects[i];\n            var body = co.collisionObject;\n            if (body.getInvInertiaTensorWorld) {\n                var m3x3 = body.getInvInertiaTensorWorld();\n                g_inertiaTensorBuffer.packScalar(co.__idx__);\n                g_inertiaTensorBuffer.packMatrix3x3(m3x3);\n                nBody++;\n            }\n        }\n        g_inertiaTensorBuffer.array[2] = nBody;\n        var array = g_inertiaTensorBuffer.toFloat32Array();\n        postMessage(array.buffer, [array.buffer]);\n    }\n\n    // Lazy execute\n    if (haveStep) {\n        g_stepBuffer.offset = 0;\n        cmd_Step(stepTime, maxSubSteps, fixedTimeStep);\n    }\n}\n\n/********************************************\n            Util Functions\n ********************************************/\n\nfunction _unPackVector3(buffer, offset) {\n    return new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset]);\n}\n\nfunction _setVector3(vec, buffer, offset) {\n    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n    return offset;\n}\n\nfunction _setVector4(vec, buffer, offset) {\n    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n    return offset;\n}\n\nfunction _createShape(buffer, offset) {\n    // Shape\n    var shapeId = buffer[offset++];\n    var shapeType = buffer[offset++];\n    var shape = g_shapes[shapeId];\n    if (!shape) {\n        switch(shapeType) {\n            case SHAPE_SPHERE:\n                shape = new Ammo.btSphereShape(buffer[offset++]);\n                break;\n            case SHAPE_BOX:\n                shape = new Ammo.btBoxShape(_unPackVector3(buffer, offset));\n                offset += 3;\n                break;\n            case SHAPE_CYLINDER:\n                shape = new Ammo.btCylinderShape(_unPackVector3(buffer, offset));\n                offset += 3;\n                break;\n            case SHAPE_CONE:\n                shape = new Ammo.btConeShape(buffer[offset++], buffer[offset++]);\n                break;\n            case SHAPE_CAPSULE:\n                shape = new Ammo.btCapsuleShape(buffer[offset++], buffer[offset++]);\n                break;\n            case SHAPE_CONVEX_TRIANGLE_MESH:\n            case SHAPE_BVH_TRIANGLE_MESH:\n                var nTriangles = buffer[offset++];\n                var nVertices = buffer[offset++];\n                var indexStride = 3 * 4;\n                var vertexStride = 3 * 4;\n                \n                var triangleIndices = buffer.subarray(offset, offset + nTriangles * 3);\n                offset += nTriangles * 3;\n                var indicesPtr = Ammo.allocate(indexStride * nTriangles, \'i32\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < triangleIndices.length; i++) {\n                    Ammo.setValue(indicesPtr + i * 4, triangleIndices[i], \'i32\');\n                }\n\n                var vertices = buffer.subarray(offset, offset + nVertices * 3);\n                offset += nVertices * 3;\n                var verticesPtr = Ammo.allocate(vertexStride * nVertices, \'float\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < vertices.length; i++) {\n                    Ammo.setValue(verticesPtr + i * 4, vertices[i], \'float\');\n                }\n\n                var indexVertexArray = new Ammo.btTriangleIndexVertexArray(nTriangles, indicesPtr, indexStride, nVertices, verticesPtr, vertexStride);\n                // TODO Cal AABB ?\n                if (shapeType === SHAPE_CONVEX_TRIANGLE_MESH) {\n                    shape = new Ammo.btConvexTriangleMeshShape(indexVertexArray, true);\n                } else {\n                    shape = new Ammo.btBvhTriangleMeshShape(indexVertexArray, true, true);\n                }\n                break;\n            case SHAPE_CONVEX_HULL:\n                var nPoints = buffer[offset++];\n                var stride = 3 * 4;\n                var points = buffer.subarray(offset, offset + nPoints * 3);\n                offset += nPoints * 3;\n                var pointsPtr = Ammo.allocate(stride * nPoints, \'float\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < points.length; i++) {\n                    Ammo.setValue(pointsPtr + i * 4, points[i], \'float\');\n                }\n\n                shape = new Ammo.btConvexHullShape(pointsPtr, nPoints, stride);\n                break;\n            case SHAPE_STATIC_PLANE:\n                var normal = _unPackVector3(buffer, offset);\n                offset+=3;\n                shape = new Ammo.btStaticPlaneShape(normal, buffer[offset++]);\n                break;\n            default:\n                throw new Error(\'Unknown type \' + shapeType);\n                break;\n        }\n\n        g_shapes[shapeId] = shape;\n    } else {\n        switch(shapeType) {\n            case SHAPE_SPHERE:\n                offset++;\n                break;\n            case SHAPE_BOX:\n            case SHAPE_CYLINDER:\n                offset += 3;\n                break;\n            case SHAPE_CONE:\n            case SHAPE_CAPSULE:\n                offset += 2;\n                break;\n            case SHAPE_CONVEX_TRIANGLE_MESH:\n            case SHAPE_BVH_TRIANGLE_MESH:\n                var nTriangles = buffer[offset++];\n                var nVertices = buffer[offset++];\n                offset += nTriangles * 3 + nVertices * 3;\n                break;\n            case SHAPE_CONVEX_HULL:\n                var nPoints = buffer[offset++];\n                offset += nPoints * 3;\n                break;\n            case SHAPE_STATIC_PLANE:\n                offset += 4;\n                break;\n            default:\n                throw new Error(\'Unknown type \' + shapeType);\n                break;\n        }\n    }\n\n    return [shape, offset];\n}\n\n/********************************************\n                COMMANDS\n ********************************************/\n\nfunction cmd_InitAmmo(ammoUrl, gravity) {\n    importScripts(ammoUrl);\n    if (!gravity) {\n        gravity = [0, -10, 0];\n    }\n\n    var broadphase = new Ammo.btDbvtBroadphase();\n    var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();\n    g_dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);\n    var solver = new Ammo.btSequentialImpulseConstraintSolver();\n    g_world = new Ammo.btDiscreteDynamicsWorld(g_dispatcher, broadphase, solver, collisionConfiguration);\n    g_world.setGravity(new Ammo.btVector3(gravity[0], gravity[1], gravity[2]));\n\n    postMessage({\n        __init__ : true\n    });\n}\n\nfunction cmd_AddCollisionObject(buffer, offset, out) {\n    var idx = buffer[offset++];\n    var bitMask = buffer[offset++];\n\n    var collisionFlags = buffer[offset++];\n    var isGhostObject = COLLISION_FLAG_GHOST_OBJECT & collisionFlags;\n    var hasCallback = COLLISION_FLAG_HAS_CALLBACK & collisionFlags;\n\n    var group = buffer[offset++];\n    var collisionMask = buffer[offset++];\n\n    if (MOTION_STATE_MOD_BIT & bitMask) {\n        var origin = new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset++]);\n        var quat = new Ammo.btQuaternion(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n        var transform = new Ammo.btTransform(quat, origin);\n    } else {\n        var transform = new Ammo.btTransform();\n    }\n\n    if (!isGhostObject) {\n        var motionState = new Ammo.btDefaultMotionState(transform);\n\n        if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {\n            var linearVelocity = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {\n            var angularVelocity = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {\n            var linearFactor = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {\n            var angularFactor = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {\n            // TODO\n            // centerOfMass = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.localInertia & bitMask) {\n            var localInertia = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {\n            var massAndDamping = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {\n            var totalForce = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {\n            var totalTorque = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n    }\n\n    var res = _createShape(buffer, offset);\n    var shape = res[0];\n    offset = res[1];\n\n    if (massAndDamping) {\n        var mass = massAndDamping.getX();\n    } else {\n        var mass = 0;\n    }\n\n    var physicsObject;\n    if (!isGhostObject) {\n        if (!localInertia) {\n            localInertia = new Ammo.btVector3(0, 0, 0);\n            if (mass !== 0) { // Is dynamic\n                shape.calculateLocalInertia(mass, localInertia);\n            }\n        }\n        var rigidBodyInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);\n        var rigidBody = new Ammo.btRigidBody(rigidBodyInfo);\n\n        rigidBody.setCollisionFlags(collisionFlags);\n\n        linearVelocity && rigidBody.setLinearVelocity(linearVelocity);\n        angularVelocity && rigidBody.setAngularVelocity(angularVelocity);\n        linearFactor && rigidBody.setLinearFactor(linearFactor);\n        angularFactor && rigidBody.setAngularFactor(angularFactor);\n        if (massAndDamping) {\n            rigidBody.setDamping(massAndDamping.getY(), massAndDamping.getZ());\n        }\n        totalForce && rigidBody.applyCentralForce(totalForce);\n        totalTorque && rigidBody.applyTorque(totalTorque);\n\n        rigidBody.setFriction(buffer[offset++]);\n        rigidBody.setRestitution(buffer[offset++]);\n\n        physicsObject = new PhysicsObject(rigidBody, transform);\n        physicsObject.hasCallback = hasCallback;\n        g_objectsList[idx] = physicsObject;\n        g_ammoPtrIdxMap[rigidBody.ptr] = idx;\n        // TODO\n        // g_world.addRigidBody(rigidBody, group, collisionMask);\n        g_world.addRigidBody(rigidBody);\n    } else {\n        // TODO What\'s the difference of Pair Caching Ghost Object ?\n        var ghostObject = new Ammo.btPairCachingGhostObject();\n        ghostObject.setCollisionShape(shape);\n        ghostObject.setWorldTransform(transform);\n\n        physicsObject = new PhysicsObject(ghostObject, transform);\n        physicsObject.hasCallback = hasCallback;\n        physicsObject.isGhostObject = true;\n        g_objectsList[idx] = physicsObject;\n        // TODO\n        // g_world.addCollisionObject(ghostObject, group, collisionMask);\n        g_world.addCollisionObject(ghostObject);\n\n        g_ammoPtrIdxMap[ghostObject.ptr] = idx;\n        // TODO\n        if (!g_ghostPairCallback) {\n            g_ghostPairCallback = new Ammo.btGhostPairCallback();\n            g_world.getPairCache().setInternalGhostPairCallback(g_ghostPairCallback);\n        }\n    }\n\n    physicsObject.__idx__ = idx;\n    out.push(physicsObject);\n\n    return offset;\n}\n\n\n// TODO destroy ?\nfunction cmd_RemoveCollisionObject(buffer, offset) {\n    var idx = buffer[offset++];\n    var obj = g_objectsList[idx];\n    g_objectsList[idx] = null;\n    if (obj.isGhostObject) {\n        g_world.removeCollisionObject(obj.collisionObject);\n    } else {\n        g_world.removeRigidBody(obj.collisionObject);\n    }\n    return offset;\n}\n\nfunction cmd_ModCollisionObject(buffer, offset) {\n    var idx = buffer[offset++];\n    var bitMask = buffer[offset++];\n\n    var obj = g_objectsList[idx];\n    var collisionObject = obj.collisionObject;\n    var bodyNeedsActive = false;\n\n    if (COLLISION_FLAG_MOD_BIT & bitMask) {\n        var collisionFlags = buffer[offset++];\n        collisionObject.setCollisionFlags(collisionFlags);\n\n        obj.hasCallback = collisionFlags & COLLISION_FLAG_HAS_CALLBACK;\n        obj.isGhostObject = collisionFlags & COLLISION_FLAG_GHOST_OBJECT;\n    }\n    if (MOTION_STATE_MOD_BIT & bitMask) {\n        var motionState = collisionObject.getMotionState();\n        var transform = obj.transform;\n        motionState.getWorldTransform(transform);\n        offset = _setVector3(transform.getOrigin(), buffer, offset);\n        offset = _setVector4(transform.getRotation(), buffer, offset);\n        motionState.setWorldTransform(transform);\n    }\n\n    if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {\n        offset = _setVector3(collisionObject.getLinearVelocity(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {\n        offset = _setVector3(collisionObject.getAngularVelocity(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {\n        offset = _setVector3(collisionObject.getLinearFactor(), buffer, offset);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {\n        offset = _setVector3(collisionObject.getAngularFactor(), buffer, offset);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {\n        // TODO\n        offset += 3;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.localInertia & bitMask) {\n        // TODO\n        offset += 3;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {\n        // TODO MASS\n        var mass = buffer[offset++];\n        collisionObject.setDamping(buffer[offset++], buffer[offset++]);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {\n        offset = _setVector3(collisionObject.getTotalForce(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {\n        offset = _setVector3(collisionObject.getTotalTorque(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n\n    if (bodyNeedsActive) {\n        collisionObject.activate();\n    }\n\n    // Shape\n    if (SHAPE_MOD_BIT & bitMask) {\n        var res = _createShape(buffer, offset);\n        var shape = res[0];\n        offset = res[1];\n        collisionObject.setCollisionShape(shape);\n    }\n    if (MATERIAL_MOD_BIT & bitMask) {\n        collisionObject.setFriction(buffer[offset++]);\n        collisionObject.setRestitution(buffer[offset++]);\n    }\n \n    return offset;\n}\n\nfunction cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {\n\n    var startTime = new Date().getTime();\n    g_world.stepSimulation(timeStep, maxSubSteps, fixedTimeStep);\n    var stepTime = new Date().getTime() - startTime;\n\n    var nChunk = 3;\n    g_stepBuffer.packScalar(nChunk);\n\n    // Sync Motion State\n    g_stepBuffer.packScalar(CMD_SYNC_MOTION_STATE);\n    var nObjects = 0;\n    var nObjectsOffset = g_stepBuffer.offset;\n    g_stepBuffer.packScalar(nObjects);\n\n    for (var i = 0; i < g_objectsList.length; i++) {\n        var obj = g_objectsList[i];\n        if (!obj) {\n            continue;\n        }\n        var collisionObject = obj.collisionObject;\n        if (collisionObject.isStaticOrKinematicObject()) {\n            continue;\n        }\n        // Idx\n        g_stepBuffer.packScalar(i);\n        var motionState = collisionObject.getMotionState();\n        motionState.getWorldTransform(obj.transform);\n\n        g_stepBuffer.packVector3(obj.transform.getOrigin());\n        g_stepBuffer.packVector4(obj.transform.getRotation());\n        nObjects++;\n    }\n    g_stepBuffer.array[nObjectsOffset] = nObjects;\n\n    // Return step time\n    g_stepBuffer.packScalar(CMD_STEP_TIME);\n    g_stepBuffer.packScalar(stepTime);\n\n    // Tick callback\n    _tickCallback(g_world);\n\n    var array = g_stepBuffer.toFloat32Array();\n\n    postMessage(array.buffer, [array.buffer]);\n}\n\n// nmanifolds - [idxA - idxB - ncontacts - [pA - pB - normal]... ]...\nfunction _tickCallback(world) {\n\n    g_stepBuffer.packScalar(CMD_COLLISION_CALLBACK);\n\n    var nManifolds = g_dispatcher.getNumManifolds();\n    var nCollision = 0;\n    var tickCmdOffset = g_stepBuffer.offset;\n    g_stepBuffer.packScalar(0);  //nManifolds place holder\n\n    for (var i = 0; i < nManifolds; i++) {\n        var contactManifold = g_dispatcher.getManifoldByIndexInternal(i);\n        var obAPtr = contactManifold.getBody0();\n        var obBPtr = contactManifold.getBody1();\n\n        var nContacts = contactManifold.getNumContacts();\n\n        if (nContacts > 0) {\n            var obAIdx = g_ammoPtrIdxMap[obAPtr];\n            var obBIdx = g_ammoPtrIdxMap[obBPtr];\n\n            var obA = g_objectsList[obAIdx];\n            var obB = g_objectsList[obBIdx];\n\n            if (obA.hasCallback || obB.hasCallback) {\n                var chunkStartOffset = g_stepBuffer.offset;\n                if (_packContactManifold(contactManifold, chunkStartOffset, obAIdx, obBIdx)) {\n                    nCollision++;\n                }\n            }\n        }\n    }\n\n    g_stepBuffer.array[tickCmdOffset] = nCollision;\n}\n\nfunction _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {\n    // place holder for idxA, idxB, nContacts\n    g_stepBuffer.offset += 3;\n    var nActualContacts = 0;\n    var nContacts = contactManifold.getNumContacts();\n    for (var j = 0; j < nContacts; j++) {\n        var cp = contactManifold.getContactPoint(j);\n\n        if (cp.getDistance() <= 0) {\n            var pA = cp.getPositionWorldOnA();\n            var pB = cp.getPositionWorldOnB();\n            var normal = cp.get_m_normalWorldOnB();\n\n            g_stepBuffer.packVector3(pA);\n            g_stepBuffer.packVector3(pB);\n            g_stepBuffer.packVector3(normal);\n            nActualContacts++;\n        }\n    }\n\n    if (nActualContacts > 0) {\n        g_stepBuffer.array[offset] = obAIdx;\n        g_stepBuffer.array[offset+1] = obBIdx;\n        g_stepBuffer.array[offset+2] = nActualContacts;\n\n        return true;\n    } else {\n        g_stepBuffer.offset -= 3;\n        return false;\n    }\n}\n\nvar rayStart = null;\nvar rayEnd = null;\nfunction cmd_Raytest(buffer, offset, isClosest) {\n    if (!rayStart) {\n        rayStart = new Ammo.btVector3();\n        rayEnd = new Ammo.btVector3();\n    }\n    var cbIdx = buffer[offset++];\n    rayStart.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n    rayEnd.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n\n    g_rayTestBuffer.offset = 0;\n    g_rayTestBuffer.packScalar(1);\n    g_rayTestBuffer.packScalar(isClosest ? CMD_RAYTEST_CLOSEST : CMD_RAYTEST_ALL);\n    g_rayTestBuffer.packScalar(cbIdx);\n\n    if (isClosest) {\n        var callback = new Module.ClosestRayResultCallback(rayStart, rayEnd);\n        var colliderIdx = -1;\n        g_world.rayTest(rayStart, rayEnd, callback);\n        if (callback.hasHit()) {\n            var co = callback.get_m_collisionObject();\n            colliderIdx = g_ammoPtrIdxMap[co.ptr];\n            g_rayTestBuffer.packScalar(colliderIdx);\n            // hit point\n            g_rayTestBuffer.packVector3(callback.get_m_hitPointWorld());\n            // hit normal\n            g_rayTestBuffer.packVector3(callback.get_m_hitNormalWorld());\n        }\n\n        var array = g_rayTestBuffer.toFloat32Array();\n        postMessage(array.buffer, [array.buffer]);\n    } else {\n        var callback = new Module.AllHitsRayResultCallback(rayStart, rayEnd);\n        g_world.rayTest(rayStart, rayEnd, callback);\n        if (callback.hasHit()) {\n            // TODO\n        }\n    }\n\n    return offset;\n}';});
+
+define('qtek/physics/Shape',['require','qtek/core/Base'],function(require) {
 
     
     
-    var Shape = require('./Shape');
+    var Base = require('qtek/core/Base');
+
+    var Shape = Base.derive({}, {
+        dirty : function() {
+            this._dirty = true;
+        }
+    });
+
+    return Shape;
+});
+define('qtek/physics/shape/Box',['require','../Shape','qtek/math/Vector3'],function(require) {
+
+    
+    
+    var Shape = require('../Shape');
     var Vector3 = require('qtek/math/Vector3');
 
     var BoxShape = Shape.derive({
@@ -5252,85 +5402,11 @@ define('qtek/physics/BoxShape',['require','./Shape','qtek/math/Vector3'],functio
 
     return BoxShape;
 });
-define('qtek/physics/Buffer',['require'],function (require) {
+define('qtek/physics/shape/Capsule',['require','../Shape','qtek/math/Vector3'],function (require) {
     
     
     
-    var Buffer = function() {
-        this._data = [];
-        this._offset = 0;
-    }
-
-
-    Buffer.prototype.set = function(offset, value) {
-        this._data[offset] = value;
-    }
-
-    Buffer.prototype.setOffset = function(offset) {
-        this._offset = offset;
-    }
-
-    Buffer.prototype.toFloat32Array = function() {
-        this._data.length = this._offset;
-        return new Float32Array(this._data);
-    }
-
-    Buffer.prototype.reset = function() {
-        this._data = [];
-        this._offset = 0;
-    }
-
-    Buffer.prototype.packScalar = function(scalar) {
-        this._data[this._offset++] = scalar;
-    }
-
-    Buffer.prototype.packVector2 = function(v2) {
-        this._data[this._offset++] = v2._array[0];
-        this._data[this._offset++] = v2._array[1];
-    }
-    
-    Buffer.prototype.packVector3 = function(v3) {
-        this._data[this._offset++] = v3._array[0];
-        this._data[this._offset++] = v3._array[1];
-        this._data[this._offset++] = v3._array[2];
-    }
-
-    Buffer.prototype.packVector4 = function(v4) {
-        this._data[this._offset++] = v4._array[0];
-        this._data[this._offset++] = v4._array[1];
-        this._data[this._offset++] = v4._array[2];
-        this._data[this._offset++] = v4._array[3];
-    }
-
-    Buffer.prototype.packArray = function(arr) {
-        for (var i = 0; i < arr.length; i++) {
-            this._data[this._offset++] = arr[i];
-        }
-    }
-
-    Buffer.prototype.packValues = function() {
-        this.packArray(arguments);
-    }
-
-    return Buffer;
-});
-define('qtek/physics/BvhTriangleMeshShape',['require','./Shape'],function (require) {
-    
-    
-    
-    var Shape = require('./Shape');
-
-    var BvhTriangleMeshShape = Shape.derive({
-        geometry : null
-    });
-
-    return BvhTriangleMeshShape;
-});
-define('qtek/physics/CapsuleShape',['require','./Shape','qtek/math/Vector3'],function (require) {
-    
-    
-    
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
     var Vector3 = require('qtek/math/Vector3');
 
     var CapsuleShape = Shape.derive({
@@ -5374,55 +5450,11 @@ define('qtek/physics/CapsuleShape',['require','./Shape','qtek/math/Vector3'],fun
 
     return CapsuleShape;
 });
-define('qtek/physics/Collider',['require','qtek/core/Base'],function(require) {
+define('qtek/physics/shape/Cone',['require','../Shape','qtek/math/Vector3'],function (require) {
     
     
     
-    var Base = require('qtek/core/Base');
-
-    var Collider = Base.derive({
-
-        collisionObject : null,
-
-        sceneNode : null,
-
-        physicsMaterial : null,
-
-        isKinematic : false,
-
-        isStatic : false,
-
-        isGhostObject : false,
-
-        _dirty : true,
-
-        _collisionHasCallback : false
-    }, {
-
-        on : function(name, action, context) {
-            Base.prototype.on.call(this, name, action, context);
-            this._collisionHasCallback = true;
-            this._dirty = true;
-        },
-
-        off : function(name, action) {
-            Base.prototype.off.call(this, name, action);
-        },
-
-        hasCollisionCallback : function() {
-            return this._collisionHasCallback;
-        }
-    });
-
-    Collider.events = ['collision'];
-
-    return Collider;
-});
-define('qtek/physics/ConeShape',['require','./Shape','qtek/math/Vector3'],function (require) {
-    
-    
-    
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
     var Vector3 = require('qtek/math/Vector3');
 
     var ConeShape = Shape.derive({
@@ -5455,51 +5487,11 @@ define('qtek/physics/ConeShape',['require','./Shape','qtek/math/Vector3'],functi
 
     return ConeShape;
 });
-define('qtek/physics/ContactPoint',['require','qtek/math/Vector3'],function(contactPoint) {
-
-    var Vector3 = require('qtek/math/Vector3');
-
-    var ContactPoint = function() {
-        this.thisPoint = new Vector3();
-        this.otherPoint = new Vector3();
-
-        this.otherCollider = null;
-        this.thisCollider = null;
-
-        this.normal = new Vector3(); // normal
-    }
-
-    return ContactPoint;
-});
-define('qtek/physics/ConvexHullShape',['require','./Shape'],function (require) {
+define('qtek/physics/shape/Cylinder',['require','../Shape','qtek/math/Vector3'],function (require) {
     
     
     
-    var Shape = require('./Shape');
-
-    var ConvexHullShape = Shape.derive({
-        geometry : null
-    });
-
-    return ConvexHullShape;
-});
-define('qtek/physics/ConvexTriangleMeshShape',['require','./Shape'],function (require) {
-    
-    
-    
-    var Shape = require('./Shape');
-
-    var ConvexTriangleMeshShape = Shape.derive({
-        geometry : null
-    });
-
-    return ConvexTriangleMeshShape;
-});
-define('qtek/physics/CylinderShape',['require','./Shape','qtek/math/Vector3'],function (require) {
-    
-    
-    
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
     var Vector3 = require('qtek/math/Vector3');
 
     // TODO margin
@@ -5564,13 +5556,11 @@ define('qtek/physics/CylinderShape',['require','./Shape','qtek/math/Vector3'],fu
 
     return CylinderShape;
 });
-define('qtek/physics/AmmoEngineConfig.js',[],function () { return '\'use strict\';\n\n// Data format\n// Command are transferred in batches\n// ncmd - [cmd chunk][cmd chunk]...\n// Add rigid body :\n//      ------header------ \n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//          But because it is stored in Float, so it can only use at most 24 bit (TODO)\n//      -------body-------\n//      collision flag(1)\n//      ...\n//      collision shape guid(1)\n//      shape type(1)\n//      ...\n// Remove rigid body:\n//      cmdtype(1)\n//      idx(1)\n//      \n// Mod rigid body :\n//      ------header------\n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//      -------body-------\n//      ...\n//      \n// Step\n//      cmdtype(1)\n//      timeStep(1)\n//      maxSubSteps(1)\n//      fixedTimeStep(1)\nthis.CMD_ADD_COLLIDER = 0;\nthis.CMD_REMOVE_COLLIDER = 1;\nthis.CMD_MOD_COLLIDER = 2;\nthis.CMD_SYNC_MOTION_STATE = 3;\nthis.CMD_STEP_TIME = 4;\nthis.CMD_COLLISION_CALLBACK = 5;\n\nthis.CMD_SYNC_INERTIA_TENSOR = 6;\n\n// Message of step\nthis.CMD_STEP = 10;\n\n// Shape types\nthis.SHAPE_BOX = 0;\nthis.SHAPE_SPHERE = 1;\nthis.SHAPE_CYLINDER = 2;\nthis.SHAPE_CONE = 3;\nthis.SHAPE_CAPSULE = 4;\nthis.SHAPE_CONVEX_TRIANGLE_MESH = 5;\nthis.SHAPE_CONVEX_HULL = 6;\nthis.SHAPE_STATIC_PLANE = 7;\nthis.SHAPE_BVH_TRIANGLE_MESH = 8;\n\n// Rigid Body properties and bit mask\n// 1. Property name\n// 2. Property size\n// 3. Mod bit mask, to check if part of rigid body needs update\nthis.RIGID_BODY_PROPS = [\n    [\'linearVelocity\', 3, 0x1],\n    [\'angularVelocity\', 3, 0x2],\n    [\'linearFactor\', 3, 0x4],\n    [\'angularFactor\', 3, 0x8],\n    [\'centerOfMass\', 3, 0x10],\n    [\'localInertia\', 3, 0x20],\n    [\'massAndDamping\', 3, 0x40],\n    [\'totalForce\', 3, 0x80],\n    [\'totalTorque\', 3, 0x100]\n];\n\nthis.RIGID_BODY_PROP_MOD_BIT = {};\nthis.RIGID_BODY_PROPS.forEach(function(item) {\n    this.RIGID_BODY_PROP_MOD_BIT[item[0]] = item[2];\n}, this);\n\nthis.SHAPE_MOD_BIT = 0x200;\nthis.MATERIAL_MOD_BIT = 0x400;\nthis.COLLISION_FLAG_MOD_BIT = 0x800;\n\nthis.MOTION_STATE_MOD_BIT = 0x1000;\n\nthis.MATERIAL_PROPS = [\n    [\'friction\', 1],\n    [\'bounciness\', 1],\n];\n\n// Collision Flags\nthis.COLLISION_FLAG_STATIC = 0x1;\nthis.COLLISION_FLAG_KINEMATIC = 0x2;\nthis.COLLISION_FLAG_GHOST_OBJECT = 0x4;\n\nthis.COLLISION_FLAG_HAS_CALLBACK = 0x200;\n\n// Collision Status\nthis.COLLISION_STATUS_ENTER = 1;\nthis.COLLISION_STATUS_STAY = 2;\nthis.COLLISION_STATUS_LEAVE = 3;\n';});
-
-define('qtek/physics/SphereShape',['require','./Shape'],function (require) {
+define('qtek/physics/shape/Sphere',['require','../Shape'],function (require) {
     
     
     
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
 
     var SphereShape = Shape.derive({
 
@@ -5596,10 +5586,12 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
     var Vector3 = require('./Vector3');
     var glmatrix = require('glmatrix');
     var vec3 = glmatrix.vec3;
+    var mat4 = glmatrix.mat4;
+    var vec4 = glmatrix.vec4;
 
     var Plane = function(normal, distance) {
-        this.normal = normal || new Vector3();
-        this.distance = distance;
+        this.normal = normal || new Vector3(0, 1, 0);
+        this.distance = distance || 0;
     }
 
     Plane.prototype = {
@@ -5610,20 +5602,111 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
             return vec3.dot(point._array, this.normal._array) - this.distance;
         },
 
+        projectPoint : function(point, out) {
+            if (!out) {
+                out = new Vector3();
+            }
+            var d = this.distanceToPoint(point);
+            vec3.scaleAndAdd(out._array, point._array, this.normal._array, -d);
+            out._dirty = true;
+            return out;
+        },
+
         normalize : function() {
             var invLen = 1 / vec3.len(this.normal._array);
             vec3.scale(this.normal._array, invLen);
             this.distance *= invLen;
+
+            return this;
+        },
+
+        intersectFrustum : function(frustum) {
+            // Check if all coords of frustum is on plane all under plane
+            var coords = frustum.vertices;
+            var normal = this.normal._array;
+            var onPlane = vec3.dot(coords[0]._array, normal) > this.distance;
+            for (var i = 1; i < 8; i++) {
+                if ((vec3.dot(coords[i]._array, normal) > this.distance) != onPlane) {
+                    return true;
+                } 
+            }
+        },
+
+        intersectLine : (function() {
+            var rd = vec3.create();
+            return function(start, end, out) {
+                var d0 = this.distanceToPoint(start);
+                var d1 = this.distanceToPoint(end);
+                if ((d0 > 0 && d1 > 0) || (d0 < 0 && d1 < 0)) {
+                    return null;
+                }
+                // Ray intersection
+                var pn = this.normal._array;
+                var d = this.distance;
+                var ro = start._array;
+                // direction
+                vec3.sub(rd, end._array, start._array);
+                vec3.normalize(rd, rd);
+
+                var divider = vec3.dot(pn, rd);
+                // ray is parallel to the plane
+                if (divider == 0) {
+                    return null;
+                }
+                if (!out) {
+                    out = new Vector3();
+                }
+                var t = (vec3.dot(pn, ro) - d) / divider;
+                vec3.scaleAndAdd(out._array, ro, rd, -t);
+                out._dirty = true;
+                return out;
+            };
+        })(),
+
+        applyTransform : (function() {
+            var inverseTranspose = mat4.create();
+            var normalv4 = vec4.create();
+            var pointv4 = vec4.create();
+            pointv4[3] = 1;
+            return function(m4) {
+                m4 = m4._array;
+                // Transform point on plane
+                vec3.scale(pointv4, this.normal._array, this.distance);
+                vec4.transformMat4(pointv4, pointv4, m4);
+                this.distance = vec3.dot(pointv4, this.normal._array);
+                // Transform plane normal
+                mat4.invert(inverseTranspose, m4);
+                mat4.transpose(inverseTranspose, inverseTranspose);
+                normalv4[3] = 0;
+                vec3.copy(normalv4, this.normal._array);
+                vec4.transformMat4(normalv4, normalv4, inverseTranspose);
+                vec3.copy(this.normal._array, normalv4);
+
+                return this;
+            }
+        })(),
+
+        copy : function(plane) {
+            vec3.copy(this.normal._array, plane.normal._array);
+            this.normal._dirty = true;
+            this.distance = plane.distance;
+            return this;
+        },
+
+        clone : function() {
+            var plane = new Plane();
+            plane.copy(this);
+            return plane;
         }
     }
 
     return Plane;
 });
-define('qtek/physics/StaticPlaneShape',['require','./Shape','qtek/math/Plane'],function(require) {
+define('qtek/physics/shape/StaticPlane',['require','../Shape','qtek/math/Plane'],function(require) {
     
     
     
-    var Shape = require('./Shape');
+    var Shape = require('../Shape');
     var Plane = require('qtek/math/Plane');
 
     var StaticPlaneShape = Shape.derive({
@@ -5641,66 +5724,205 @@ define('qtek/physics/StaticPlaneShape',['require','./Shape','qtek/math/Plane'],f
 
     return StaticPlaneShape;
 });
+define('qtek/physics/shape/ConvexTriangleMesh',['require','../Shape'],function (require) {
+    
+    
+    
+    var Shape = require('../Shape');
+
+    var ConvexTriangleMeshShape = Shape.derive({
+        geometry : null
+    });
+
+    return ConvexTriangleMeshShape;
+});
+define('qtek/physics/shape/BvhTriangleMesh',['require','../Shape'],function (require) {
+    
+    
+    
+    var Shape = require('../Shape');
+
+    var BvhTriangleMeshShape = Shape.derive({
+        geometry : null
+    });
+
+    return BvhTriangleMeshShape;
+});
+define('qtek/physics/shape/ConvexHull',['require','../Shape'],function (require) {
+    
+    
+    
+    var Shape = require('../Shape');
+
+    var ConvexHullShape = Shape.derive({
+        geometry : null
+    });
+
+    return ConvexHullShape;
+});
+define('qtek/physics/Pool',['require'],function (require) {
+    
+    function Pool() {
+
+        this._size = 0;
+
+        this._data = [];
+
+        this._empties = [];
+    }
+
+    Pool.prototype.add = function(obj) {
+        var idx;
+        if (this._empties.length > 0) {
+            idx = this._empties.pop();
+            this._data[idx] = obj;
+        } else {
+            idx = this._data.length;
+            this._data.push(obj);
+        }
+        this._size++;
+
+        return idx;
+    }
+
+    Pool.prototype.remove = function(obj) {
+        var idx = this._data.indexOf(obj);
+        this.removeAt(idx);
+        this._size--;
+    }
+
+    Pool.prototype.removeAt = function(idx) {
+        this._data[idx] = null;
+        this._empties.push(idx);
+    }
+
+    Pool.prototype.getAt = function(idx) {
+        return this._data[idx];
+    }
+
+    Pool.prototype.getIndex = function(obj) {
+        return this._data.indexOf(obj);
+    }
+
+    Pool.prototype.getAll = function() {
+        return this._data;
+    }
+
+    Pool.prototype.refresh = function() {
+        var newData = [];
+        for (var i = 0; i < this._data.length; i++) {
+            if (this._data[i] !== null) {
+                newData.push(this._data[i]);
+            }
+        }
+        this._data = newData;
+    }
+
+    Pool.prototype.each = function(callback, context) {
+        for (var i = 0; i < this._data.length; i++) {
+            if (this._data[i] !== null) {
+                callback.call(context || this, this._data[i], i);
+            }
+        }
+        this._data = newData;
+    }
+
+    return Pool;
+});
 // Ammo.js adapter
 // https://github.com/kripken/ammo.js
-define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js','./BoxShape','./CapsuleShape','./ConeShape','./CylinderShape','./SphereShape','./StaticPlaneShape','./ConvexTriangleMeshShape','./BvhTriangleMeshShape','./ConvexHullShape','./Buffer','./ContactPoint','qtek/math/Vector3'],function(require) {
+define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./AmmoEngineConfig.js','./AmmoEngineWorker.js','./shape/Box','./shape/Capsule','./shape/Cone','./shape/Cylinder','./shape/Sphere','./shape/StaticPlane','./shape/ConvexTriangleMesh','./shape/BvhTriangleMesh','./shape/ConvexHull','./Buffer','./Pool','./ContactPoint','qtek/math/Vector3'],function(require) {
 
     
 
     var Base = require('qtek/core/Base');
+    var util = require('qtek/core/util');
     var configStr = require('./AmmoEngineConfig.js');
+    // Using inline web worker
+    // http://www.html5rocks.com/en/tutorials/workers/basics/#toc-inlineworkers
+    // Put the script together instead of using importScripts
+    var workerScript = require('./AmmoEngineWorker.js');
+    var finalWorkerScript = [configStr, workerScript].join('\n');
+    var workerBlob = new Blob([finalWorkerScript]);
+    // Undefine the module and release the memory
+    finalWorkerScript = null;
+    workerScript = null;
 
-    var BoxShape = require('./BoxShape');
-    var CapsuleShape = require('./CapsuleShape');
-    var ConeShape = require('./ConeShape');
-    var CylinderShape = require('./CylinderShape');
-    var SphereShape = require('./SphereShape');
-    var StaticPlaneShape = require('./StaticPlaneShape');
-    var ConvexTriangleMeshShape = require('./ConvexTriangleMeshShape');
-    var BvhTriangleMeshShape = require('./BvhTriangleMeshShape');
-    var ConvexHullShape = require('./ConvexHullShape');
+    var BoxShape = require('./shape/Box');
+    var CapsuleShape = require('./shape/Capsule');
+    var ConeShape = require('./shape/Cone');
+    var CylinderShape = require('./shape/Cylinder');
+    var SphereShape = require('./shape/Sphere');
+    var StaticPlaneShape = require('./shape/StaticPlane');
+    var ConvexTriangleMeshShape = require('./shape/ConvexTriangleMesh');
+    var BvhTriangleMeshShape = require('./shape/BvhTriangleMesh');
+    var ConvexHullShape = require('./shape/ConvexHull');
     var QBuffer  = require('./Buffer');
+    var QPool = require('./Pool');
     var ContactPoint = require('./ContactPoint');
 
     var Vector3 = require('qtek/math/Vector3');
 
     var ConfigCtor = new Function(configStr);
-
     var config = new ConfigCtor();
 
-    var Engine = Base.derive({
+    var Engine = Base.derive(function() {
 
-        workerUrl : '',
+        return {
 
-        maxSubSteps : 3,
+            ammoUrl : '',
 
-        fixedTimeStep : 1 / 60,
+            gravity : new Vector3(0, -10, 0),
 
-        _stepTime : 0,
+            maxSubSteps : 3,
 
-        _isWorkerFree : true
+            fixedTimeStep : 1 / 60,
+
+            _stepTime : 0,
+
+            _isWorkerInited : true,
+            _isWorkerFree : true,
+            _accumalatedTime : 0,
+
+            _colliders : new QPool(),
+
+            _collidersToAdd : [],
+            _collidersToRemove : [],
+
+            _contacts : [],
+
+            _callbacks : new QPool(),
+
+            _cmdBuffer : new QBuffer(),
+
+            _rayTestBuffer : new QBuffer()
+        }
 
     }, function () {
         this.init();
     }, {
 
         init : function() {
-            this._engineWorker = new Worker(this.workerUrl);
-            
-            this._colliders = [];
-            this._empties = [];
-            this._collidersToAdd = [];
-            this._collidersToRemove = [];
-
-            this._contacts = [];
-
-            this._cmdBuffer = new QBuffer();
+            var workerBlobUrl = window.URL.createObjectURL(workerBlob);
+            this._engineWorker = new Worker(workerBlobUrl);
+            // TODO more robust
+            var ammoUrl = util.relative2absolute(this.ammoUrl, window.location.href.split('/').slice(0, -1).join('/'));
+            this._engineWorker.postMessage({
+                __init__ : true,
+                ammoUrl : ammoUrl,
+                gravity : [this.gravity.x, this.gravity.y, this.gravity.z]
+            });
 
             var self = this;
 
             this._engineWorker.onmessage = function(e) {
+                if (e.data.__init__) {
+                    this._isWorkerInited = true;
+                    return;
+                }
+
                 var buffer = new Float32Array(e.data);
-        
+
                 var nChunk = buffer[0];
                 var offset = 1;
                 for (var i = 0; i < nChunk; i++) {
@@ -5720,6 +5942,10 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
                         case config.CMD_SYNC_INERTIA_TENSOR:
                             offset = self._syncInertiaTensor(buffer, offset);
                             break;
+                        case config.CMD_RAYTEST_ALL:
+                        case config.CMD_RAYTEST_CLOSEST:
+                            offset = self._rayTestCallback(buffer, offset, cmdType === config.CMD_RAYTEST_CLOSEST);
+                            break;
                         default:
                     }
                 }
@@ -5731,10 +5957,15 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
         },
 
         step : function(timeStep) {
-            // Wait when the worker is free to use
-            if (!this._isWorkerFree) {
-                this._stepTime = timeStep;
+            if (!this._isWorkerInited) {
                 return;
+            }
+            // Wait until the worker is free to use
+            if (!this._isWorkerFree) {
+                this._accumalatedTime += timeStep;
+                return;
+            } else {
+                this._accumalatedTime = timeStep;
             }
 
             var nChunk = 0;
@@ -5746,7 +5977,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
             nChunk += this._doAddCollider();
 
             // Step
-            this._cmdBuffer.packValues(config.CMD_STEP, this._stepTime, this.maxSubSteps, this.fixedTimeStep);
+            this._cmdBuffer.packValues(config.CMD_STEP, this._accumalatedTime, this.maxSubSteps, this.fixedTimeStep);
             nChunk++;
 
             this._cmdBuffer.set(0, nChunk);
@@ -5757,8 +5988,12 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
 
             // Clear forces at the end of each step
             // http://bulletphysics.org/Bullet/phpBB3/viewtopic.php?t=8622
-            for (var i = 0; i < this._colliders.length; i++) {
-                var collider = this._colliders[i];
+            var colliders = this._colliders.getAll();
+            for (var i = 0; i < colliders.length; i++) {
+                var collider = colliders[i];
+                if (collider === null) {
+                    continue;
+                }
                 // TODO isKnematic ??? 
                 if (!(collider.isStatic || collider.isKinematic || collider.isGhostObject)) {
                     var body = collider.collisionObject;
@@ -5772,7 +6007,6 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
             }
 
             this._isWorkerFree = false;
-            this._stepTime = 0;
         },
 
         addCollider : function(collider) {
@@ -5786,19 +6020,43 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
             }
         },
 
+        rayTest : function(start, end, callback, closest) {
+            var idx = this._callbacks.add(callback);
+            this._rayTestBuffer.setOffset(0);
+            this._rayTestBuffer.packScalar(1);  // nChunk
+            if (closest || closest === undefined) {
+                this._rayTestBuffer.packScalar(config.CMD_RAYTEST_CLOSEST);
+            } else {
+                this._rayTestBuffer.packScalar(config.CMD_RAYTEST_ALL);
+            }
+            this._rayTestBuffer.packScalar(idx);
+            this._rayTestBuffer.packVector3(start);
+            this._rayTestBuffer.packVector3(end);
+
+            var array = this._rayTestBuffer.toFloat32Array();
+            this._engineWorker.postMessage(array.buffer, [array.buffer]);
+        },
+
+        _rayTestCallback : function(buffer, offset, isClosest) {
+            var idx = buffer[offset++];
+            var callback = this._callbacks.getAt(idx);
+            var colliderIdx = buffer[offset++];
+            var collider = null, hitPoint = null, hitNormal = null;
+            if (colliderIdx >= 0) {
+                var collider = this._colliders.getAt(colliderIdx);
+                var hitPoint = new Vector3(buffer[offset++], buffer[offset++], buffer[offset++]);
+                var hitNormal = new Vector3(buffer[offset++], buffer[offset++], buffer[offset++]);
+            }
+            callback && callback(collider, hitPoint, hitNormal);
+            this._callbacks.removeAt(idx);
+            return offset;
+        },
+
         _doAddCollider : function() {
             var nChunk = 0;
             for (var i = 0; i < this._collidersToAdd.length; i++) {
                 var collider = this._collidersToAdd[i];
-                var idx;
-                if (this._empties.length > 0) {
-                    idx = this._empties.pop();
-                    this._colliders[idx] = collider;
-                } else {
-                    idx = this._colliders.length;
-                    this._colliders.push(collider);
-                }
-
+                var idx = this._colliders.add(collider);
                 // Head
                 // CMD type
                 // id
@@ -5819,8 +6077,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
             var nChunk = 0;
             for (var i = 0; i < this._collidersToRemove.length; i++) {
                 var idx = this._collidersToRemove[i];
-                this._colliders[idx] = null;
-                this._empties.push(idx);
+                this._colliders.removeAt(idx);
 
                 // Header
                 // CMD type
@@ -5836,8 +6093,12 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
         _doModCollider : function() {
             var nChunk = 0;
             // Find modified rigid bodies
-            for (var i = 0; i < this._colliders.length; i++) {
-                var collider = this._colliders[i];
+            var colliders = this._colliders.getAll();
+            for (var i = 0; i < colliders.length; i++) {
+                var collider = colliders[i];
+                if (collider === null) {
+                    continue;
+                }
                 var chunkOffset = this._cmdBuffer._offset;
                 // Header is 3 * 4 byte
                 this._cmdBuffer._offset += 3;
@@ -5882,6 +6143,13 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
                 modBit |= config.COLLISION_FLAG_MOD_BIT;
 
                 collider._dirty = false;
+            }
+
+            if (isCreate) {
+                // Collision masks
+                // TODO change after create
+                this._cmdBuffer.packScalar(collider.group);
+                this._cmdBuffer.packScalar(collider.collisionMask);
             }
 
             //  Motion State 
@@ -6026,9 +6294,9 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
             var nObjects = buffer[offset++];
 
             for (var i = 0; i < nObjects; i++) {
-                var id = buffer[offset++];
+                var idx = buffer[offset++];
 
-                var collider = this._colliders[id];
+                var collider = this._colliders.getAt(idx);
 
                 var node = collider.sceneNode;
                 if (node) {
@@ -6054,8 +6322,8 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
                 var idxA = buffer[offset++];
                 var idxB = buffer[offset++];
 
-                var colliderA = this._colliders[idxA];
-                var colliderB = this._colliders[idxB];
+                var colliderA = this._colliders.getAt(idxA);
+                var colliderB = this._colliders.getAt(idxB);
 
                 if (!this._contacts[idxA]) {
                     this._contacts[idxA] = [];
@@ -6101,7 +6369,8 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
                 for (var i = 0; i < this._contacts.length; i++) {
                     var contacts = this._contacts[i];
                     if (contacts && contacts.length) {
-                        this._colliders[i].trigger('collision', contacts);
+                        var collider = this._colliders.getAt(i);
+                        collider.trigger('collision', contacts);
                     }
                 }
 
@@ -6114,7 +6383,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','./AmmoEngineConfig.js'
             var nBody = buffer[offset++];
             for (var i = 0; i < nBody; i++) {
                 var idx = buffer[offset++];
-                var collider = this._colliders[idx];
+                var collider = this._colliders.getAt(idx);
                 var body = collider.collisionObject;
 
                 var m = body.invInertiaTensorWorld._array;
@@ -6178,21 +6447,6 @@ define('qtek/physics/Material',['require','qtek/core/Base'],function (require) {
     });
 
     return Material;
-});
-define('qtek/physics/Physics',['require','qtek/core/Base'],function(require) {
-    
-    
-    
-    var Base = require('qtek/core/Base');
-
-    var Physics = Base.derive({
-
-        engine : null
-    }, {
-
-    });
-
-    return Physics;
 });
 define('qtek/math/Quaternion',['require','glmatrix'],function(require) {
 
@@ -6660,31 +6914,37 @@ define('qtek/physics/RigidBody',['require','qtek/core/Base','qtek/math/Vector3',
 
     return RigidBody;
 });
-define( 'qtek/physics/qtek-physics',['require','qtek/physics/BoxShape','qtek/physics/Buffer','qtek/physics/BvhTriangleMeshShape','qtek/physics/CapsuleShape','qtek/physics/Collider','qtek/physics/ConeShape','qtek/physics/ContactPoint','qtek/physics/ConvexHullShape','qtek/physics/ConvexTriangleMeshShape','qtek/physics/CylinderShape','qtek/physics/Engine','qtek/physics/GhostObject','qtek/physics/Material','qtek/physics/Physics','qtek/physics/RigidBody','qtek/physics/Shape','qtek/physics/SphereShape','qtek/physics/StaticPlaneShape'],function(require){
+define( 'qtek/physics/qtek-physics',['require','qtek/physics/Buffer','qtek/physics/Collider','qtek/physics/ContactPoint','qtek/physics/Engine','qtek/physics/GhostObject','qtek/physics/Material','qtek/physics/Pool','qtek/physics/RigidBody','qtek/physics/Shape','qtek/physics/shape/Box','qtek/physics/shape/BvhTriangleMesh','qtek/physics/shape/Capsule','qtek/physics/shape/Cone','qtek/physics/shape/ConvexHull','qtek/physics/shape/ConvexTriangleMesh','qtek/physics/shape/Cylinder','qtek/physics/shape/Sphere','qtek/physics/shape/StaticPlane'],function(require){
     
     var exportsObject = {
-	"BoxShape": require('qtek/physics/BoxShape'),
 	"Buffer": require('qtek/physics/Buffer'),
-	"BvhTriangleMeshShape": require('qtek/physics/BvhTriangleMeshShape'),
-	"CapsuleShape": require('qtek/physics/CapsuleShape'),
 	"Collider": require('qtek/physics/Collider'),
-	"ConeShape": require('qtek/physics/ConeShape'),
 	"ContactPoint": require('qtek/physics/ContactPoint'),
-	"ConvexHullShape": require('qtek/physics/ConvexHullShape'),
-	"ConvexTriangleMeshShape": require('qtek/physics/ConvexTriangleMeshShape'),
-	"CylinderShape": require('qtek/physics/CylinderShape'),
 	"Engine": require('qtek/physics/Engine'),
 	"GhostObject": require('qtek/physics/GhostObject'),
 	"Material": require('qtek/physics/Material'),
-	"Physics": require('qtek/physics/Physics'),
+	"Pool": require('qtek/physics/Pool'),
 	"RigidBody": require('qtek/physics/RigidBody'),
 	"Shape": require('qtek/physics/Shape'),
-	"SphereShape": require('qtek/physics/SphereShape'),
-	"StaticPlaneShape": require('qtek/physics/StaticPlaneShape')
+	"shape": {
+		"Box": require('qtek/physics/shape/Box'),
+		"BvhTriangleMesh": require('qtek/physics/shape/BvhTriangleMesh'),
+		"Capsule": require('qtek/physics/shape/Capsule'),
+		"Cone": require('qtek/physics/shape/Cone'),
+		"ConvexHull": require('qtek/physics/shape/ConvexHull'),
+		"ConvexTriangleMesh": require('qtek/physics/shape/ConvexTriangleMesh'),
+		"Cylinder": require('qtek/physics/shape/Cylinder'),
+		"Sphere": require('qtek/physics/shape/Sphere'),
+		"StaticPlane": require('qtek/physics/shape/StaticPlane')
+	}
 };
     
     return exportsObject;
 });
-qtek.physics = require('qtek/physics');
+qtekPhysics = require('qtek/physics/qtek-physics');
+
+for(var name in qtekPhysics){
+    _exports[name] = qtekPhysics[name];
+}
 
 });
