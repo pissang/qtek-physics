@@ -14,6 +14,7 @@ define( function(require){
 		"Box": require('qtek/physics/shape/Box'),
 		"BvhTriangleMesh": require('qtek/physics/shape/BvhTriangleMesh'),
 		"Capsule": require('qtek/physics/shape/Capsule'),
+		"Compound": require('qtek/physics/shape/Compound'),
 		"Cone": require('qtek/physics/shape/Cone'),
 		"ConvexHull": require('qtek/physics/shape/ConvexHull'),
 		"ConvexTriangleMesh": require('qtek/physics/shape/ConvexTriangleMesh'),

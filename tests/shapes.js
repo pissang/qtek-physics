@@ -13,6 +13,7 @@ define(function(require) {
     var BvhTriangleMeshShape = require('shape/BvhTriangleMesh');
     var ConvexHullShape = require('shape/ConvexHull');
     var StaticPlaneShape = require('shape/StaticPlane');
+    var CompoundShape = require('shape/Compound');
     var PhysicsMaterial = require("Material");
 
     var qtek = require('qtek/qtek');

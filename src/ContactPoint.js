@@ -9,7 +9,8 @@ define(function(contactPoint) {
         this.otherCollider = null;
         this.thisCollider = null;
 
-        this.normal = new Vector3(); // normal
+        // Normal on otherCollider
+        this.normal = new Vector3(); 
     }
 
     return ContactPoint;

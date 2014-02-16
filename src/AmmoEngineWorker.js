@@ -1,7 +1,7 @@
 'use strict';
 
 // TODO
-// importScripts('./AmmoEngineConfig.js');
+// Memory leak
 
 /********************************************
             Global Objects
@@ -178,12 +178,14 @@ function _setVector4(vec, buffer, offset) {
     return offset;
 }
 
-function _createShape(buffer, offset) {
+function _unPackShape(buffer, offset) {
     // Shape
     var shapeId = buffer[offset++];
     var shapeType = buffer[offset++];
     var shape = g_shapes[shapeId];
+    var isCreate;
     if (!shape) {
+        isCreate = true;
         switch(shapeType) {
             case SHAPE_SPHERE:
                 shape = new Ammo.btSphereShape(buffer[offset++]);
@@ -248,6 +250,19 @@ function _createShape(buffer, offset) {
                 offset+=3;
                 shape = new Ammo.btStaticPlaneShape(normal, buffer[offset++]);
                 break;
+            case SHAPE_COMPOUND:
+                var nChildren = buffer[offset++];
+                var shape = new Ammo.btCompoundShape();
+                for (var i = 0; i < nChildren; i++) {
+                    var origin = new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset++]);
+                    var rotation = new Ammo.btQuaternion(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);
+                    var res = _unPackShape(buffer, offset);
+                    var childShape = res[0];
+                    offset = res[1];
+                    var transform = new Ammo.btTransform(rotation, origin);
+                    shape.addChildShape(transform, childShape);
+                }
+                break;
             default:
                 throw new Error('Unknown type ' + shapeType);
                 break;
@@ -255,6 +270,7 @@ function _createShape(buffer, offset) {
 
         g_shapes[shapeId] = shape;
     } else {
+        isCreate = false;
         switch(shapeType) {
             case SHAPE_SPHERE:
                 offset++;
@@ -280,13 +296,23 @@ function _createShape(buffer, offset) {
             case SHAPE_STATIC_PLANE:
                 offset += 4;
                 break;
+            case SHAPE_COMPOUND:
+                // TODO when children are changed
+                var nChildren = buffer[offset++];
+                for (var i = 0; i < nChildren; i++) {
+                    offset += 7;
+                    var res = _unPackShape(buffer, offset);
+                    var childShape = res[0];
+                    offset = res[1];
+                }
+                break;
             default:
                 throw new Error('Unknown type ' + shapeType);
                 break;
         }
     }
 
-    return [shape, offset];
+    return [shape, offset, isCreate];
 }
 
 /********************************************
@@ -372,7 +398,7 @@ function cmd_AddCollisionObject(buffer, offset, out) {
         }
     }
 
-    var res = _createShape(buffer, offset);
+    var res = _unPackShape(buffer, offset);
     var shape = res[0];
     offset = res[1];
 
@@ -444,7 +470,6 @@ function cmd_AddCollisionObject(buffer, offset, out) {
 }
 
 
-// TODO destroy ?
 function cmd_RemoveCollisionObject(buffer, offset) {
     var idx = buffer[offset++];
     var obj = g_objectsList[idx];
@@ -454,6 +479,8 @@ function cmd_RemoveCollisionObject(buffer, offset) {
     } else {
         g_world.removeRigidBody(obj.collisionObject);
     }
+    // TODO destroy ?
+    Ammo.destroy(obj.collisionObject);
     return offset;
 }
 
@@ -523,7 +550,14 @@ function cmd_ModCollisionObject(buffer, offset) {
 
     // Shape
     if (SHAPE_MOD_BIT & bitMask) {
-        var res = _createShape(buffer, offset);
+        // TODO
+        // destroy child shapes of compound shape
+        var shapeId = buffer[offset];
+        var shape = g_shapes[shapeId];
+        Ammo.destroy(shape);
+        g_shapes[shapeId] = null;
+
+        var res = _unPackShape(buffer, offset);
         var shape = res[0];
         offset = res[1];
         collisionObject.setCollisionShape(shape);

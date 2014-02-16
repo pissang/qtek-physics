@@ -6,6 +6,8 @@ define(function(require) {
 
     var Collider = Base.derive({
 
+        name : '',
+
         collisionObject : null,
 
         sceneNode : null,

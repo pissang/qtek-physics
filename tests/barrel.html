@@ -69,7 +69,7 @@
                  ****************************/
                 var loader = new qtek.loader.GLTF();
                 loader.load('assets/prop_barrel.json');
-
+                var compoundShape = new qtekPhysics.shape.Compound();
                 var barrelShape = new qtekPhysics.shape.ConvexHull({
                     geometry : new qtek.geometry.Cylinder({
                         capSegments : 8,
@@ -77,12 +77,11 @@
                         radius : 0.5
                     })
                 });
+                compoundShape.addChildShape(barrelShape, new qtek.math.Vector3(0, 0.6, 0));
                 var barrelPhysicsMaterial = new qtekPhysics.Material();
                 loader.success(function(res) {
                     var _scene = res.scene;
                     var barrelNode = _scene.getNode('prop_barrel');
-                    barrelNode.childAt(0).position.y -= 0.6;
-                    barrelNode.childAt(1).position.y -= 0.6;
 
                     qtek.core.util.each(res.materials, function(mat, name) {
                         mat.shader.define('DIFFUSEMAP_ALPHA_GLOSS');
@@ -91,13 +90,13 @@
                     qtek.core.util.each(res.textures, function(texture) {
                         texture.flipY = false;
                     });
-                    for (var i = 0; i < 400; i++) {
+                    for (var i = 0; i < 20; i++) {
                         var newBarrel = barrelNode.clone();
                         newBarrel.position.set(Math.random() * 30 - 15, Math.random() * 10 + 5, Math.random() * 30 - 15);
                         scene.add(newBarrel);
 
                         var rigidBody = new qtekPhysics.RigidBody({
-                            shape : barrelShape,
+                            shape : compoundShape,
                             mass : 10
                         });
                         var collider = new qtekPhysics.Collider({

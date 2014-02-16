@@ -26,6 +26,7 @@ define(function(require) {
     var ConvexTriangleMeshShape = require('./shape/ConvexTriangleMesh');
     var BvhTriangleMeshShape = require('./shape/BvhTriangleMesh');
     var ConvexHullShape = require('./shape/ConvexHull');
+    var CompoundShape = require('./shape/Compound');
     var QBuffer  = require('./Buffer');
     var QPool = require('./Pool');
     var ContactPoint = require('./ContactPoint');
@@ -448,6 +449,16 @@ define(function(require) {
                     for (var i = 0; i < geo.attributes.position.value.length; i++) {
                         this._cmdBuffer.packArray(geo.attributes.position.value[i]);
                     }
+                }
+            } else if (shape instanceof CompoundShape) {
+                this._cmdBuffer.packScalar(config.SHAPE_COMPOUND);
+                this._cmdBuffer.packScalar(shape._children.length);
+                for (var i = 0; i < shape._children.length; i++) {
+                    var child = shape._children[i];
+                    this._cmdBuffer.packVector3(child.position);
+                    this._cmdBuffer.packVector4(child.rotation);
+                    // Always pack child
+                    this._packShape(child.shape, true);
                 }
             }
 

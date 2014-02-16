@@ -58,6 +58,7 @@ this.SHAPE_CONVEX_TRIANGLE_MESH = 5;
 this.SHAPE_CONVEX_HULL = 6;
 this.SHAPE_STATIC_PLANE = 7;
 this.SHAPE_BVH_TRIANGLE_MESH = 8;
+this.SHAPE_COMPOUND = 9;
 
 // Rigid Body properties and bit mask
 // 1. Property name
