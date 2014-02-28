@@ -34,6 +34,12 @@ define(function (require) {
         this._empties.push(idx);
     }
 
+    Pool.prototype.removeAll = function() {
+        this._data = [];
+        this._empties = [];
+        this._size = 0;
+    }
+
     Pool.prototype.getAt = function(idx) {
         return this._data[idx];
     }

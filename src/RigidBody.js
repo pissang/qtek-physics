@@ -89,6 +89,16 @@ define(function(require) {
         clearForces : function() {
             this.totalForce.set(0, 0, 0);
             this.totalTorque.set(0, 0, 0);
+        },
+
+        clone : function() {
+            var rigidBody = new RigidBody();
+            rigidBody.shape = this.shape;
+            rigidBody.linearFactor.copy(this.linearFactor);
+            rigidBody.angularFactor.copy(this.angularFactor);
+            rigidBody.massAndDamping.copy(this.massAndDamping);
+
+            return rigidBody;
         }
     });
 

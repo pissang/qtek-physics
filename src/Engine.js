@@ -50,7 +50,7 @@ define(function(require) {
 
             _stepTime : 0,
 
-            _isWorkerInited : true,
+            _isWorkerInited : false,
             _isWorkerFree : true,
             _accumalatedTime : 0,
 
@@ -68,15 +68,16 @@ define(function(require) {
             _rayTestBuffer : new QBuffer()
         }
 
-    }, function () {
-        this.init();
     }, {
 
         init : function() {
             var workerBlobUrl = window.URL.createObjectURL(workerBlob);
             this._engineWorker = new Worker(workerBlobUrl);
             // TODO more robust
-            var ammoUrl = util.relative2absolute(this.ammoUrl, window.location.href.split('/').slice(0, -1).join('/'));
+            var ammoUrl = this.ammoUrl;
+            if (ammoUrl.indexOf('http') != 0) {
+                ammoUrl = util.relative2absolute(this.ammoUrl, window.location.href.split('/').slice(0, -1).join('/'));
+            }
             this._engineWorker.postMessage({
                 __init__ : true,
                 ammoUrl : ammoUrl,
@@ -87,7 +88,7 @@ define(function(require) {
 
             this._engineWorker.onmessage = function(e) {
                 if (e.data.__init__) {
-                    this._isWorkerInited = true;
+                    self._isWorkerInited = true;
                     return;
                 }
 
@@ -184,7 +185,7 @@ define(function(require) {
         },
 
         removeCollider : function(collider) {
-            var idx = this._colliders.indexOf(collider);
+            var idx = this._colliders.getIndex(collider);
             if (idx >= 0) {
                 this._collidersToRemove.push(idx);
             }
@@ -205,6 +206,18 @@ define(function(require) {
 
             var array = this._rayTestBuffer.toFloat32Array();
             this._engineWorker.postMessage(array.buffer, [array.buffer]);
+        },
+
+        dispose : function() {
+            this._colliders.removeAll();
+            this._callbacks.removeAll();
+            this._collidersToAdd = [];
+            this._collidersToRemove = [];
+            this._contacts = [];
+            // TODO
+            this._engineWorker = null;
+
+            this._isWorkerInited = false;
         },
 
         _rayTestCallback : function(buffer, offset, isClosest) {

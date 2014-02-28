@@ -21,6 +21,7 @@ define(function(require) {
     var engine = new Engine({
         ammoUrl : '../lib/ammo.fast.js'
     });
+    engine.init();
     var renderer = new qtek.Renderer({
         canvas : document.getElementById('Main')
     });
@@ -317,15 +318,8 @@ define(function(require) {
     });
     animation.on('frame', function(dTime) {
         control.update(dTime);
+        engine.step(dTime);
         shadowMapPass.render(renderer, scene, camera);
         renderer.render(scene, camera);
     });
-
-    var time = new Date().getTime();
-    engine.after('step', function() {
-        var currentTime = new Date().getTime();
-        engine.step(currentTime - time)
-        time = currentTime;
-    });
-    engine.step(0.03);
 });
