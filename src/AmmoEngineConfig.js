@@ -8,7 +8,7 @@
 //      cmdtype(1)
 //      idx(1)
 //      32 bit mask(1)
-//          But because it is stored in Float, so it can only use at most 24 bit (TODO)
+//          But because it is stored in Float, it can only use at most 24 bit (TODO)
 //      -------body-------
 //      collision flag(1)
 //      ...

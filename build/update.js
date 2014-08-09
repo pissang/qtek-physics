@@ -33,7 +33,7 @@ glob("**/*.js", {
             return memo[propName];
         }, namespace);
         
-        object[baseName] = "__require('qtek/physics/"+filePathWithOutExt+"')__";
+        object[baseName] = "__require('qtek-physics/"+filePathWithOutExt+"')__";
     })
 
     var jsString = JSON.stringify( namespace, null, '\t' );

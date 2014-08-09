@@ -10,11 +10,10 @@ module.exports = function(grunt){
     function makeRequirejsConfig(isAMD) {
         var common = {
             'baseUrl' : './src',
-            'name' : 'qtek/physics',
+            'name' : 'qtek-physics',
             'exclude' : ['text'],
             'paths' : {
-                'glmatrix' : '../../qtek/thirdparty/gl-matrix',
-                'qtek' : '../../qtek/src'
+                'glmatrix' : '../../qtek/thirdparty/gl-matrix'
             },
             'optimize':"none",
             'onBuildWrite' : function(moduleName, path, content){
@@ -42,20 +41,29 @@ module.exports = function(grunt){
             common.out = 'dist/qtek-physics.amd.js';
             common.include = includeList;
             common.exclude.push('glmatrix');
+            common.exclude.push('qtek');
             common.packages = [{
-                name : 'qtek/physics',
+                name : 'qtek-physics',
                 location : '.',
                 main : 'qtek-physics.amd'
+            }, {
+                name: 'qtek',
+                location: '../../qtek/src',
+                main: 'qtek'
             }]
         } else {
             common.out = 'dist/qtek-physics.js';
             common.packages = [{
-                name : 'qtek/physics',
+                name : 'qtek-physics',
                 location : '.',
                 main : 'qtek-physics'
+            }, {
+                name: 'qtek',
+                location: '../../qtek/src',
+                main: 'qtek'
             }];
             common.wrap = {
-                'startFile' : ['build/wrap/start.js', 'build/almond-mod.js'],
+                'startFile' : ['build/wrap/start.js', 'build/almond.js'],
                 'endFile' : 'build/wrap/end.js'
             }
         }
@@ -107,7 +115,7 @@ module.exports = function(grunt){
                 ) {
                     return;
                 }
-                includeList.push('qtek/physics/' + file.replace(/\.js$/, ''));
+                includeList.push('qtek-physics/' + file.replace(/\.js$/, ''));
             });
 
             grunt.task.run(['requirejs:amd', 'uglify:amd']);

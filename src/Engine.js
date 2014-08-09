@@ -214,7 +214,7 @@ define(function(require) {
             this._collidersToAdd = [];
             this._collidersToRemove = [];
             this._contacts = [];
-            // TODO
+            this._engineWorker.terminate()
             this._engineWorker = null;
 
             this._isWorkerInited = false;

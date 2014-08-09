@@ -415,7 +415,7 @@ var requirejs, require, define;
     };
 }());
 
-define('qtek/physics/Buffer',['require'],function (require) {
+define('qtek-physics/Buffer',['require'],function (require) {
     
     
     
@@ -478,110 +478,106 @@ define('qtek/physics/Buffer',['require'],function (require) {
 });
 define('qtek/core/mixin/derive',['require'],function(require) {
 
-
-
-/**
- * derive a sub class from base class
- * @makeDefaultOpt [Object|Function] default option of this sub class, 
-                        method of the sub can use this.xxx to access this option
- * @initialize [Function](optional) initialize after the sub class is instantiated
- * @proto [Object](optional) prototype methods/property of the sub class
- *
- * @export{object}
- */
-function derive(makeDefaultOpt, initialize/*optional*/, proto/*optional*/) {
-
-    if (typeof initialize == "object") {
-        proto = initialize;
-        initialize = null;
-    }
-
-    var _super = this;
-
-    var propList;
-    if (! (makeDefaultOpt instanceof Function)) {
-        // Optimize the property iterate if it have been fixed
-        propList = [];
-        for (var propName in makeDefaultOpt) {
-            if (makeDefaultOpt.hasOwnProperty(propName)) {
-                propList.push(propName);
-            }
-        }
-    }
-
-    var sub = function(options) {
-
-        // call super constructor
-        _super.call(this);
-
-        if (makeDefaultOpt instanceof Function) {
-            // call defaultOpt generate function each time
-            // if it is a function, So we can make sure each 
-            // property in the object is fresh
-            extend(this, makeDefaultOpt.call(this));
-        } else {
-            extendWithPropList(this, makeDefaultOpt, propList);
-        }
-        
-        if (options) {
-            extend(this, options);
-        }
-
-        if (this.constructor === sub) {
-            // initialize function will be called in the order of inherit
-            var base = sub;
-            var initializers = sub.__initializer__;
-            for (var i = 0; i < initializers.length; i++) {
-                initializers[i].call(this);
-            }
-        }
-    };
-    // save super constructor
-    sub.__super__ = _super;
-    // initialize function will be called after all the super constructor is called
-    if (!_super.__initializer__) {
-        sub.__initializer__ = [];
-    } else {
-        sub.__initializer__ = _super.__initializer__.slice();
-    }
-    if (initialize) {
-        sub.__initializer__.push(initialize);
-    }
-
-    var Ctor = function() {};
-    Ctor.prototype = _super.prototype;
-    sub.prototype = new Ctor();
-    sub.prototype.constructor = sub;
-    extend(sub.prototype, proto);
     
-    // extend the derive method as a static method;
-    sub.derive = _super.derive;
 
-    return sub;
-}
+    /**
+     * Extend a sub class from base class
+     * @param {object|Function} makeDefaultOpt default option of this sub class, method of the sub can use this.xxx to access this option
+     * @param {Function} [initialize] Initialize after the sub class is instantiated
+     * @param {Object} [proto] Prototype methods/properties of the sub class
+     * @memberOf qtek.core.mixin.derive.
+     * @return {Function}
+     */
+    function derive(makeDefaultOpt, initialize/*optional*/, proto/*optional*/) {
 
-function extend(target, source) {
-    if (!source) {
-        return;
+        if (typeof initialize == 'object') {
+            proto = initialize;
+            initialize = null;
+        }
+
+        var _super = this;
+
+        var propList;
+        if (!(makeDefaultOpt instanceof Function)) {
+            // Optimize the property iterate if it have been fixed
+            propList = [];
+            for (var propName in makeDefaultOpt) {
+                if (makeDefaultOpt.hasOwnProperty(propName)) {
+                    propList.push(propName);
+                }
+            }
+        }
+
+        var sub = function(options) {
+
+            // call super constructor
+            _super.apply(this, arguments);
+
+            if (makeDefaultOpt instanceof Function) {
+                // Invoke makeDefaultOpt each time if it is a function, So we can make sure each 
+                // property in the object will not be shared by mutiple instances
+                extend(this, makeDefaultOpt.call(this));
+            } else {
+                extendWithPropList(this, makeDefaultOpt, propList);
+            }
+            
+            if (this.constructor === sub) {
+                // Initialize function will be called in the order of inherit
+                var initializers = sub.__initializers__;
+                for (var i = 0; i < initializers.length; i++) {
+                    initializers[i].apply(this, arguments);
+                }
+            }
+        };
+        // save super constructor
+        sub.__super__ = _super;
+        // Initialize function will be called after all the super constructor is called
+        if (!_super.__initializers__) {
+            sub.__initializers__ = [];
+        } else {
+            sub.__initializers__ = _super.__initializers__.slice();
+        }
+        if (initialize) {
+            sub.__initializers__.push(initialize);
+        }
+
+        var Ctor = function() {};
+        Ctor.prototype = _super.prototype;
+        sub.prototype = new Ctor();
+        sub.prototype.constructor = sub;
+        extend(sub.prototype, proto);
+        
+        // extend the derive method as a static method;
+        sub.derive = _super.derive;
+
+        return sub;
     }
-    for (var name in source) {
-        if (source.hasOwnProperty(name)) {
-            target[name] = source[name];
+
+    function extend(target, source) {
+        if (!source) {
+            return;
+        }
+        for (var name in source) {
+            if (source.hasOwnProperty(name)) {
+                target[name] = source[name];
+            }
         }
     }
-}
 
-function extendWithPropList(target, source, propList) {
-    for (var i = 0; i < propList.length; i++) {
-        var propName = propList[i];
-        target[propName] = source[propName];
-    }   
-}
+    function extendWithPropList(target, source, propList) {
+        for (var i = 0; i < propList.length; i++) {
+            var propName = propList[i];
+            target[propName] = source[propName];
+        }   
+    }
 
-return {
-    derive : derive
-}
-
+    /**
+     * @alias qtek.core.mixin.derive
+     * @mixin
+     */
+    return {
+        derive : derive
+    };
 });
 define('qtek/core/mixin/notifier',[],function() {
 
@@ -589,8 +585,15 @@ define('qtek/core/mixin/notifier',[],function() {
         this.action = action;
         this.context = context;
     }
-
-    return{
+    /**
+     * @mixin
+     * @alias qtek.core.mixin.notifier
+     */
+    var notifier = {
+        /**
+         * Trigger event
+         * @param  {string} name
+         */
         trigger : function(name) {
             if (! this.hasOwnProperty('__handlers__')) {
                 return;
@@ -601,36 +604,48 @@ define('qtek/core/mixin/notifier',[],function() {
 
             var hdls = this.__handlers__[name];
             var l = hdls.length, i = -1, args = arguments;
-            // Optimize from backbone
+            // Optimize advise from backbone
             switch (args.length) {
                 case 1: 
-                    while (++i < l)
+                    while (++i < l) {
                         hdls[i].action.call(hdls[i].context);
+                    }
                     return;
                 case 2:
-                    while (++i < l)
+                    while (++i < l) {
                         hdls[i].action.call(hdls[i].context, args[1]);
+                    }
                     return;
                 case 3:
-                    while (++i < l)
+                    while (++i < l) {
                         hdls[i].action.call(hdls[i].context, args[1], args[2]);
+                    }
                     return;
                 case 4:
-                    while (++i < l)
+                    while (++i < l) {
                         hdls[i].action.call(hdls[i].context, args[1], args[2], args[3]);
+                    }
                     return;
                 case 5:
-                    while (++i < l)
+                    while (++i < l) {
                         hdls[i].action.call(hdls[i].context, args[1], args[2], args[3], args[4]);
+                    }
                     return;
                 default:
-                    while (++i < l)
+                    while (++i < l) {
                         hdls[i].action.apply(hdls[i].context, Array.prototype.slice.call(args, 1));
+                    }
                     return;
             }
         },
-        
-        on : function(name, action, context/*optional*/) {
+        /**
+         * Register event handler
+         * @param  {string} name
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
+        on : function(name, action, context) {
             if (!name || !action) {
                 return;
             }
@@ -645,9 +660,16 @@ define('qtek/core/mixin/notifier',[],function() {
             var handler = new Handler(action, context || this);
             handlers[name].push(handler);
 
-            return handler;
+            return this;
         },
 
+        /**
+         * Register event, event will only be triggered once and then removed
+         * @param  {string} name
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
         once : function(name, action, context) {
             if (!name || !action) {
                 return;
@@ -660,8 +682,14 @@ define('qtek/core/mixin/notifier',[],function() {
             return this.on(name, wrapper, context);
         },
 
-        // Alias of on('before')
-        before : function(name, action, context/*optional*/) {
+        /**
+         * Alias of once('before' + name)
+         * @param  {string} name
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
+        before : function(name, action, context) {
             if (!name || !action) {
                 return;
             }
@@ -669,8 +697,14 @@ define('qtek/core/mixin/notifier',[],function() {
             return this.on(name, action, context);
         },
 
-        // Alias of on('after')
-        after : function(name, action, context/*optional*/) {
+        /**
+         * Alias of once('after' + name)
+         * @param  {string} name
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
+        after : function(name, action, context) {
             if (!name || !action) {
                 return;
             }
@@ -678,16 +712,32 @@ define('qtek/core/mixin/notifier',[],function() {
             return this.on(name, action, context);
         },
 
-        // Alias of once('success')
-        success : function(action, context/*optional*/) {
+        /**
+         * Alias of on('success')
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
+        success : function(action, context) {
             return this.once('success', action, context);
         },
 
-        // Alias of once('error')
-        error : function() {
+        /**
+         * Alias of on('error')
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
+        error : function(action, context) {
             return this.once('error', action, context);
         },
 
+        /**
+         * Alias of on('success')
+         * @param  {Function} action
+         * @param  {Object} [context]
+         * @chainable
+         */
         off : function(name, action) {
             
             var handlers = this.__handlers__ || (this.__handlers__={});
@@ -698,7 +748,6 @@ define('qtek/core/mixin/notifier',[],function() {
             }
             if (handlers[name]) {
                 var hdls = handlers[name];
-                // Splice is evil!!
                 var retains = [];
                 for (var i = 0; i < hdls.length; i++) {
                     if (action && hdls[i].action !== action) {
@@ -707,8 +756,16 @@ define('qtek/core/mixin/notifier',[],function() {
                 }
                 handlers[name] = retains;
             } 
+
+            return this;
         },
 
+        /**
+         * If registered the event handler
+         * @param  {string}  name
+         * @param  {Function}  action
+         * @return {boolean}
+         */
         has : function(name, action) {
             var handlers = this.__handlers__;
 
@@ -723,19 +780,37 @@ define('qtek/core/mixin/notifier',[],function() {
                 }
             }
         }
-    }
+    };
     
+    return notifier;
 });
 define('qtek/core/util',['require'],function(require){
     
+    
+
     var guid = 0;
 
+    /**
+     * Util functions
+     * @namespace qtek.core.util
+     */
 	var util = {
 
+        /**
+         * Generate GUID
+         * @return {number}
+         * @memberOf qtek.core.util
+         */
 		genGUID : function() {
 			return ++guid;
 		},
-
+        /**
+         * Relative path to absolute path
+         * @param  {string} path
+         * @param  {string} basePath
+         * @return {string}
+         * @memberOf qtek.core.util
+         */
         relative2absolute : function(path, basePath) {
             if (!basePath || path.match(/^\//)) {
                 return path;
@@ -754,6 +829,13 @@ define('qtek/core/util',['require'],function(require){
             return basePathParts.join('/') + '/' + pathParts.join('/');
         },
 
+        /**
+         * Extend target with source
+         * @param  {Object} target
+         * @param  {Object} source
+         * @return {Object}
+         * @memberOf qtek.core.util
+         */
         extend : function(target, source) {
             if (source) {
                 for (var name in source) {
@@ -765,6 +847,13 @@ define('qtek/core/util',['require'],function(require){
             return target;
         },
 
+        /**
+         * Extend properties to target if not exist.
+         * @param  {Object} target
+         * @param  {Object} source
+         * @return {Object}
+         * @memberOf qtek.core.util
+         */
         defaults : function(target, source) {
             if (source) {
                 for (var propName in source) {
@@ -773,8 +862,16 @@ define('qtek/core/util',['require'],function(require){
                     }
                 }
             }
+            return target;
         },
-
+        /**
+         * Extend properties with a given property list to avoid for..in.. iteration.
+         * @param  {Object} target
+         * @param  {Object} source
+         * @param  {Array.<string>} propList
+         * @return {Object}
+         * @memberOf qtek.core.util
+         */
         extendWithPropList : function(target, source, propList) {
             if (source) {
                 for (var i = 0; i < propList.length; i++) {
@@ -784,7 +881,14 @@ define('qtek/core/util',['require'],function(require){
             }
             return target;
         },
-
+        /**
+         * Extend properties to target if not exist. With a given property list avoid for..in.. iteration.
+         * @param  {Object} target
+         * @param  {Object} source
+         * @param  {Array.<string>} propList
+         * @return {Object}
+         * @memberOf qtek.core.util
+         */
         defaultsWithPropList : function(target, source, propList) {
             if (source) {
                 for (var i = 0; i < propList.length; i++) {
@@ -796,7 +900,12 @@ define('qtek/core/util',['require'],function(require){
             }
             return target;
         },
-
+        /**
+         * @param  {Object|Array} obj
+         * @param  {Function} iterator
+         * @param  {Object} [context]
+         * @memberOf qtek.core.util
+         */
         each : function(obj, iterator, context) {
             if (!(obj && iterator)) {
                 return;
@@ -816,15 +925,32 @@ define('qtek/core/util',['require'],function(require){
             }
         },
 
+        /**
+         * Is object ?
+         * @param  {}  obj
+         * @return {boolean}
+         * @memberOf qtek.core.util
+         */
         isObject : function(obj) {
             return obj === Object(obj);
         },
 
+        /**
+         * Is array ?
+         * @param  {}  obj
+         * @return {boolean}
+         * @memberOf qtek.core.util
+         */
         isArray : function(obj) {
             return obj instanceof Array;
         },
 
-        // Can be TypedArray
+        /**
+         * Is array like, which have a length property
+         * @param  {}  obj
+         * @return {boolean}
+         * @memberOf qtek.core.util
+         */
         isArrayLike : function(obj) {
             if (!obj) {
                 return false;
@@ -833,6 +959,11 @@ define('qtek/core/util',['require'],function(require){
             }
         },
 
+        /**
+         * @param  {} obj
+         * @return {}
+         * @memberOf qtek.core.util
+         */
         clone : function(obj) {
             if (!util.isObject(obj)) {
                 return obj;
@@ -848,31 +979,51 @@ define('qtek/core/util',['require'],function(require){
                 return util.extend({}, obj);
             }
         }
-	}
+	};
 
     return util;
 });
 define('qtek/core/Base',['require','./mixin/derive','./mixin/notifier','./util'],function(require){
 
-    var deriveMixin = require("./mixin/derive");
-    var notifierMixin = require("./mixin/notifier");
-    var util = require("./util");
+    
 
-    var Base = function(){
+    var deriveMixin = require('./mixin/derive');
+    var notifierMixin = require('./mixin/notifier');
+    var util = require('./util');
+
+    /**
+     * Base class of all objects
+     * @constructor
+     * @alias qtek.core.Base
+     * @mixes qtek.core.mixin.notifier
+     */
+    var Base = function() {
+        /**
+         * @type {number}
+         */
         this.__GUID__ = util.genGUID();
-    }
+    };
+
+    Base.__initializers__ = [
+        function(opts) {
+            util.extend(this, opts);
+        }
+    ];
+    
     util.extend(Base, deriveMixin);
     util.extend(Base.prototype, notifierMixin);
 
     return Base;
 });
-define('qtek/physics/Collider',['require','qtek/core/Base'],function(require) {
+define('qtek-physics/Collider',['require','qtek/core/Base'],function(require) {
     
     
     
     var Base = require('qtek/core/Base');
 
     var Collider = Base.derive({
+
+        name : '',
 
         collisionObject : null,
 
@@ -5038,25 +5189,47 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
     
     
 
-    var glMatrix = require("glmatrix");
+    var glMatrix = require('glmatrix');
     var vec3 = glMatrix.vec3;
 
+    /**
+     * @constructor
+     * @alias qtek.math.Vector3
+     * @param {number} x
+     * @param {number} y
+     * @param {number} z
+     */
     var Vector3 = function(x, y, z) {
         
         x = x || 0;
         y = y || 0;
         z = z || 0;
 
+        /**
+         * Storage of Vector3, read and write of x, y, z will change the values in _array
+         * All methods also operate on the _array instead of x, y, z components
+         * @type {Float32Array}
+         */
         this._array = vec3.fromValues(x, y, z);
-        // Dirty flag is used by the Node to determine
-        // if the localTransform is updated to latest
+
+        /**
+         * Dirty flag is used by the Node to determine
+         * if the matrix is updated to latest
+         * @type {boolean}
+         */
         this._dirty = true;
-    }
+    };
 
     Vector3.prototype= {
 
         constructor : Vector3,
 
+        /**
+         * @name x
+         * @type {number}
+         * @memberOf qtek.math.Vector3
+         * @instance
+         */
         get x() {
             return this._array[0];
         },
@@ -5066,6 +5239,12 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             this._dirty = true;
         },
 
+        /**
+         * @name y
+         * @type {number}
+         * @memberOf qtek.math.Vector3
+         * @instance
+         */
         get y() {
             return this._array[1];
         },
@@ -5075,6 +5254,12 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             this._dirty = true;
         },
 
+        /**
+         * @name z
+         * @type {number}
+         * @memberOf qtek.math.Vector3
+         * @instance
+         */
         get z() {
             return this._array[2];
         },
@@ -5084,12 +5269,24 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             this._dirty = true;
         },
 
+        /**
+         * Add b to self
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         add : function(b) {
             vec3.add(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Set x, y and z components
+         * @param  {number}  x
+         * @param  {number}  y
+         * @param  {number}  z
+         * @return {qtek.math.Vector3}
+         */
         set : function(x, y, z) {
             this._array[0] = x;
             this._array[1] = y;
@@ -5098,6 +5295,11 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             return this;
         },
 
+        /**
+         * Set x, y and z components from array
+         * @param  {Float32Array|number[]} arr
+         * @return {qtek.math.Vector3}
+         */
         setArray : function(arr) {
             this._array[0] = arr[0];
             this._array[1] = arr[1];
@@ -5107,54 +5309,107 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             return this;
         },
 
+        /**
+         * Clone a new Vector3
+         * @return {qtek.math.Vector3}
+         */
         clone : function() {
             return new Vector3( this.x, this.y, this.z );
         },
 
+        /**
+         * Copy from b
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         copy : function(b) {
-            vec3.copy( this._array, b._array );
+            vec3.copy(this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Cross product of self and b, written to a Vector3 out
+         * @param  {qtek.math.Vector3} out
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         cross : function(out, b) {
             vec3.cross(out._array, this._array, b._array);
+            out._dirty = true;
             return this;
         },
 
+        /**
+         * Alias for distance
+         * @param  {qtek.math.Vector3} b
+         * @return {number}
+         */
         dist : function(b) {
             return vec3.dist(this._array, b._array);
         },
 
+        /**
+         * Distance between self and b
+         * @param  {qtek.math.Vector3} b
+         * @return {number}
+         */
         distance : function(b) {
             return vec3.distance(this._array, b._array);
         },
 
+        /**
+         * Alias for divide
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         div : function(b) {
             vec3.div(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Divide self by b
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         divide : function(b) {
             vec3.divide(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Dot product of self and b
+         * @param  {qtek.math.Vector3} b
+         * @return {number}
+         */
         dot : function(b) {
             return vec3.dot(this._array, b._array);
         },
 
+        /**
+         * Alias of length
+         * @return {number}
+         */
         len : function() {
             return vec3.len(this._array);
         },
 
+        /**
+         * Calculate the length
+         * @return {number}
+         */
         length : function() {
             return vec3.length(this._array);
         },
         /**
-         * Perform linear interpolation between a and b
+         * Linear interpolation between a and b
+         * @param  {qtek.math.Vector3} a
+         * @param  {qtek.math.Vector3} b
+         * @param  {number}  t
+         * @return {qtek.math.Vector3}
          */
         lerp : function(a, b, t) {
             vec3.lerp(this._array, a._array, b._array, t);
@@ -5162,55 +5417,97 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             return this;
         },
 
+        /**
+         * Minimum of self and b
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         min : function(b) {
-            vec2.min(this._array, this._array, b._array);
+            vec3.min(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Maximum of self and b
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         max : function(b) {
-            vec2.max(this._array, this._array, b._array);
+            vec3.max(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Alias for multiply
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         mul : function(b) {
             vec3.mul(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Mutiply self and b
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         multiply : function(b) {
             vec3.multiply(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Negate self
+         * @return {qtek.math.Vector3}
+         */
         negate : function() {
             vec3.negate(this._array, this._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Normalize self
+         * @return {qtek.math.Vector3}
+         */
         normalize : function() {
             vec3.normalize(this._array, this._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Generate random x, y, z components with a given scale
+         * @param  {number} scale
+         * @return {qtek.math.Vector3}
+         */
         random : function(scale) {
             vec3.random(this._array, scale);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Scale self
+         * @param  {number}  scale
+         * @return {qtek.math.Vector3}
+         */
         scale : function(s) {
             vec3.scale(this._array, this._array, s);
             this._dirty = true;
             return this;
         },
+
         /**
-         * add b by a scaled factor
+         * Scale b and add to self
+         * @param  {qtek.math.Vector3} b
+         * @param  {number}  scale
+         * @return {qtek.math.Vector3}
          */
         scaleAndAdd : function(b, s) {
             vec3.scaleAndAdd(this._array, this._array, b._array, s);
@@ -5218,52 +5515,99 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
             return this;
         },
 
+        /**
+         * Alias for squaredDistance
+         * @param  {qtek.math.Vector3} b
+         * @return {number}
+         */
         sqrDist : function(b) {
             return vec3.sqrDist(this._array, b._array);
         },
 
+        /**
+         * Squared distance between self and b
+         * @param  {qtek.math.Vector3} b
+         * @return {number}
+         */
         squaredDistance : function(b) {
             return vec3.squaredDistance(this._array, b._array);
         },
 
+        /**
+         * Alias for squaredLength
+         * @return {number}
+         */
         sqrLen : function() {
             return vec3.sqrLen(this._array);
         },
 
+        /**
+         * Squared length of self
+         * @return {number}
+         */
         squaredLength : function() {
             return vec3.squaredLength(this._array);
         },
 
+        /**
+         * Alias for subtract
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         sub : function(b) {
             vec3.sub(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Subtract b from self
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Vector3}
+         */
         subtract : function(b) {
             vec3.subtract(this._array, this._array, b._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Transform self with a Matrix3 m
+         * @param  {qtek.math.Matrix3} m
+         * @return {qtek.math.Vector3}
+         */
         transformMat3 : function(m) {
             vec3.transformMat3(this._array, this._array, m._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Transform self with a Matrix4 m
+         * @param  {qtek.math.Matrix4} m
+         * @return {qtek.math.Vector3}
+         */
         transformMat4 : function(m) {
             vec3.transformMat4(this._array, this._array, m._array);
             this._dirty = true;
             return this;
         },
-
+        /**
+         * Transform self with a Quaternion q
+         * @param  {qtek.math.Quaternion} q
+         * @return {qtek.math.Vector3}
+         */
         transformQuat : function(q) {
             vec3.transformQuat(this._array, this._array, q._array);
             this._dirty = true;
             return this;
         },
 
+        /**
+         * Trasnform self into projection space with m
+         * @param  {qtek.math.Matrix4} m
+         * @return {qtek.math.Vector3}
+         */
         applyProjection : function(m) {
             var v = this._array;
             m = m._array;
@@ -5283,9 +5627,7 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
 
             return this;
         },
-        /**
-         * Set euler angle from queternion
-         */
+        
         setEulerFromQuaternion : function(q) {
             // var sqx = q.x * q.x;
             // var sqy = q.y * q.y;
@@ -5299,27 +5641,342 @@ define('qtek/math/Vector3',['require','glmatrix'],function(require) {
         },
 
         toString : function() {
-            return "[" + Array.prototype.join.call(this._array, ",") + "]";
+            return '[' + Array.prototype.join.call(this._array, ',') + ']';
         },
-    }
+    };
 
-    function clamp( x ) {
-        return Math.min( Math.max( x, -1 ), 1 );
-    }
+    // Supply methods that are not in place
+    
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.add = function(out, a, b) {
+        vec3.add(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
 
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {number}  x
+     * @param  {number}  y
+     * @param  {number}  z
+     * @return {qtek.math.Vector3}  
+     */
+    Vector3.set = function(out, x, y, z) {
+        vec3.set(out._array, x, y, z);
+        out._dirty = true;
+    };
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.copy = function(out, b) {
+        vec3.copy(out._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.cross = function(out, a, b) {
+        vec3.cross(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {number}
+     */
+    Vector3.dist = function(a, b) {
+        return vec3.distance(a._array, b._array);
+    };
+
+    /**
+     * @method
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {number}
+     */
+    Vector3.distance = Vector3.dist;
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.div = function(out, a, b) {
+        vec3.divide(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @method
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.divide = Vector3.div;
+
+    /**
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {number}
+     */
+    Vector3.dot = function(a, b) {
+        return vec3.dot(a._array, b._array);
+    };
+
+    /**
+     * @param  {qtek.math.Vector3} a
+     * @return {number}
+     */
+    Vector3.len = function(b) {
+        return vec3.length(b._array);
+    };
+
+    // Vector3.length = Vector3.len;
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @param  {number}  t
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.lerp = function(out, a, b, t) {
+        vec3.lerp(out._array, a._array, b._array, t);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.min = function(out, a, b) {
+        vec3.min(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.max = function(out, a, b) {
+        vec3.max(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.mul = function(out, a, b) {
+        vec3.multiply(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @method
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.multiply = Vector3.mul;
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.negate = function(out, a) {
+        vec3.negate(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.normalize = function(out, a) {
+        vec3.normalize(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {number}  scale
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.random = function(out, scale) {
+        vec3.random(out._array, scale);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {number}  scale
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.scale = function(out, a, scale) {
+        vec3.scale(out._array, a._array, scale);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @param  {number}  scale
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.scaleAndAdd = function(out, a, b, scale) {
+        vec3.scaleAndAdd(out._array, a._array, b._array, scale);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {number}
+     */
+    Vector3.sqrDist = function(a, b) {
+        return vec3.sqrDist(a._array, b._array);
+    };
+    /**
+     * @method
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {number}
+     */
+    Vector3.squaredDistance = Vector3.sqrDist;
+    /**
+     * @param  {qtek.math.Vector3} a
+     * @return {number}
+     */
+    Vector3.sqrLen = function(a) {
+        return vec3.sqrLen(a._array);
+    };
+    /**
+     * @method
+     * @param  {qtek.math.Vector3} a
+     * @return {number}
+     */
+    Vector3.squaredLength = Vector3.sqrLen;
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.sub = function(out, a, b) {
+        vec3.subtract(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @method
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Vector3} b
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.subtract = Vector3.sub;
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {Matrix3} m
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.transformMat3 = function(out, a, m) {
+        vec3.transformMat3(out._array, a._array, m._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Matrix4} m
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.transformMat4 = function(out, a, m) {
+        vec3.transformMat4(out._array, a._array, m._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @param  {qtek.math.Vector3} out
+     * @param  {qtek.math.Vector3} a
+     * @param  {qtek.math.Quaternion} q
+     * @return {qtek.math.Vector3}
+     */
+    Vector3.transformQuat = function(out, a, q) {
+        vec3.transformQuat(out._array, a._array, q._array);
+        out._dirty = true;
+        return out;
+    };
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.POSITIVE_X = new Vector3(1, 0, 0);
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.NEGATIVE_X = new Vector3(-1, 0, 0);
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.POSITIVE_Y = new Vector3(0, 1, 0);
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.NEGATIVE_Y = new Vector3(0, -1, 0);
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.POSITIVE_Z = new Vector3(0, 0, 1);
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.NEGATIVE_Z = new Vector3(0, 0, -1);
-
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.UP = new Vector3(0, 1, 0);
+    /**
+     * @type {qtek.math.Vector3}
+     */
     Vector3.ZERO = new Vector3(0, 0, 0);
 
     return Vector3;
-} );
-define('qtek/physics/ContactPoint',['require','qtek/math/Vector3'],function(contactPoint) {
+});
+define('qtek-physics/ContactPoint',['require','qtek/math/Vector3'],function(contactPoint) {
 
     var Vector3 = require('qtek/math/Vector3');
 
@@ -5330,16 +5987,17 @@ define('qtek/physics/ContactPoint',['require','qtek/math/Vector3'],function(cont
         this.otherCollider = null;
         this.thisCollider = null;
 
-        this.normal = new Vector3(); // normal
+        // Normal on otherCollider
+        this.normal = new Vector3(); 
     }
 
     return ContactPoint;
 });
-define('qtek/physics/AmmoEngineConfig.js',[],function () { return '\'use strict\';\n\n// Data format\n// Command are transferred in batches\n// ncmd - [cmd chunk][cmd chunk]...\n// Add rigid body :\n//      ------header------ \n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//          But because it is stored in Float, so it can only use at most 24 bit (TODO)\n//      -------body-------\n//      collision flag(1)\n//      ...\n//      collision shape guid(1)\n//      shape type(1)\n//      ...\n// Remove rigid body:\n//      cmdtype(1)\n//      idx(1)\n//      \n// Mod rigid body :\n//      ------header------\n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//      -------body-------\n//      ...\n//      \n// Step\n//      cmdtype(1)\n//      timeStep(1)\n//      maxSubSteps(1)\n//      fixedTimeStep(1)\n\nthis.CMD_ADD_COLLIDER = 1;\nthis.CMD_REMOVE_COLLIDER = 2;\nthis.CMD_MOD_COLLIDER = 3;\nthis.CMD_SYNC_MOTION_STATE = 4;\nthis.CMD_STEP_TIME = 5;\nthis.CMD_COLLISION_CALLBACK = 6;\n\nthis.CMD_SYNC_INERTIA_TENSOR = 7;\n\n// Step\nthis.CMD_STEP = 10;\n// Ray test\nthis.CMD_RAYTEST_CLOSEST = 11;\nthis.CMD_RAYTEST_ALL = 12;\n\n// Shape types\nthis.SHAPE_BOX = 0;\nthis.SHAPE_SPHERE = 1;\nthis.SHAPE_CYLINDER = 2;\nthis.SHAPE_CONE = 3;\nthis.SHAPE_CAPSULE = 4;\nthis.SHAPE_CONVEX_TRIANGLE_MESH = 5;\nthis.SHAPE_CONVEX_HULL = 6;\nthis.SHAPE_STATIC_PLANE = 7;\nthis.SHAPE_BVH_TRIANGLE_MESH = 8;\n\n// Rigid Body properties and bit mask\n// 1. Property name\n// 2. Property size\n// 3. Mod bit mask, to check if part of rigid body needs update\nthis.RIGID_BODY_PROPS = [\n    [\'linearVelocity\', 3, 0x1],\n    [\'angularVelocity\', 3, 0x2],\n    [\'linearFactor\', 3, 0x4],\n    [\'angularFactor\', 3, 0x8],\n    [\'centerOfMass\', 3, 0x10],\n    [\'localInertia\', 3, 0x20],\n    [\'massAndDamping\', 3, 0x40],\n    [\'totalForce\', 3, 0x80],\n    [\'totalTorque\', 3, 0x100]\n];\n\nthis.RIGID_BODY_PROP_MOD_BIT = {};\nthis.RIGID_BODY_PROPS.forEach(function(item) {\n    this.RIGID_BODY_PROP_MOD_BIT[item[0]] = item[2];\n}, this);\n\nthis.SHAPE_MOD_BIT = 0x200;\nthis.MATERIAL_MOD_BIT = 0x400;\nthis.COLLISION_FLAG_MOD_BIT = 0x800;\n\nthis.MOTION_STATE_MOD_BIT = 0x1000;\n\nthis.MATERIAL_PROPS = [\n    [\'friction\', 1],\n    [\'bounciness\', 1],\n];\n\n// Collision Flags\nthis.COLLISION_FLAG_STATIC = 0x1;\nthis.COLLISION_FLAG_KINEMATIC = 0x2;\nthis.COLLISION_FLAG_GHOST_OBJECT = 0x4;\n\nthis.COLLISION_FLAG_HAS_CALLBACK = 0x200;\n\n// Collision Status\nthis.COLLISION_STATUS_ENTER = 1;\nthis.COLLISION_STATUS_STAY = 2;\nthis.COLLISION_STATUS_LEAVE = 3;\n';});
+define('qtek-physics/AmmoEngineConfig.js',[],function () { return '\'use strict\';\n\n// Data format\n// Command are transferred in batches\n// ncmd - [cmd chunk][cmd chunk]...\n// Add rigid body :\n//      ------header------ \n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//          But because it is stored in Float, it can only use at most 24 bit (TODO)\n//      -------body-------\n//      collision flag(1)\n//      ...\n//      collision shape guid(1)\n//      shape type(1)\n//      ...\n// Remove rigid body:\n//      cmdtype(1)\n//      idx(1)\n//      \n// Mod rigid body :\n//      ------header------\n//      cmdtype(1)\n//      idx(1)\n//      32 bit mask(1)\n//      -------body-------\n//      ...\n//      \n// Step\n//      cmdtype(1)\n//      timeStep(1)\n//      maxSubSteps(1)\n//      fixedTimeStep(1)\n\nthis.CMD_ADD_COLLIDER = 1;\nthis.CMD_REMOVE_COLLIDER = 2;\nthis.CMD_MOD_COLLIDER = 3;\nthis.CMD_SYNC_MOTION_STATE = 4;\nthis.CMD_STEP_TIME = 5;\nthis.CMD_COLLISION_CALLBACK = 6;\n\nthis.CMD_SYNC_INERTIA_TENSOR = 7;\n\n// Step\nthis.CMD_STEP = 10;\n// Ray test\nthis.CMD_RAYTEST_CLOSEST = 11;\nthis.CMD_RAYTEST_ALL = 12;\n\n// Shape types\nthis.SHAPE_BOX = 0;\nthis.SHAPE_SPHERE = 1;\nthis.SHAPE_CYLINDER = 2;\nthis.SHAPE_CONE = 3;\nthis.SHAPE_CAPSULE = 4;\nthis.SHAPE_CONVEX_TRIANGLE_MESH = 5;\nthis.SHAPE_CONVEX_HULL = 6;\nthis.SHAPE_STATIC_PLANE = 7;\nthis.SHAPE_BVH_TRIANGLE_MESH = 8;\nthis.SHAPE_COMPOUND = 9;\n\n// Rigid Body properties and bit mask\n// 1. Property name\n// 2. Property size\n// 3. Mod bit mask, to check if part of rigid body needs update\nthis.RIGID_BODY_PROPS = [\n    [\'linearVelocity\', 3, 0x1],\n    [\'angularVelocity\', 3, 0x2],\n    [\'linearFactor\', 3, 0x4],\n    [\'angularFactor\', 3, 0x8],\n    [\'centerOfMass\', 3, 0x10],\n    [\'localInertia\', 3, 0x20],\n    [\'massAndDamping\', 3, 0x40],\n    [\'totalForce\', 3, 0x80],\n    [\'totalTorque\', 3, 0x100]\n];\n\nthis.RIGID_BODY_PROP_MOD_BIT = {};\nthis.RIGID_BODY_PROPS.forEach(function(item) {\n    this.RIGID_BODY_PROP_MOD_BIT[item[0]] = item[2];\n}, this);\n\nthis.SHAPE_MOD_BIT = 0x200;\nthis.MATERIAL_MOD_BIT = 0x400;\nthis.COLLISION_FLAG_MOD_BIT = 0x800;\n\nthis.MOTION_STATE_MOD_BIT = 0x1000;\n\nthis.MATERIAL_PROPS = [\n    [\'friction\', 1],\n    [\'bounciness\', 1],\n];\n\n// Collision Flags\nthis.COLLISION_FLAG_STATIC = 0x1;\nthis.COLLISION_FLAG_KINEMATIC = 0x2;\nthis.COLLISION_FLAG_GHOST_OBJECT = 0x4;\n\nthis.COLLISION_FLAG_HAS_CALLBACK = 0x200;\n\n// Collision Status\nthis.COLLISION_STATUS_ENTER = 1;\nthis.COLLISION_STATUS_STAY = 2;\nthis.COLLISION_STATUS_LEAVE = 3;\n';});
 
-define('qtek/physics/AmmoEngineWorker.js',[],function () { return '\'use strict\';\n\n// TODO\n// importScripts(\'./AmmoEngineConfig.js\');\n\n/********************************************\n            Global Objects\n ********************************************/\n\nfunction PhysicsObject(collisionObject, transform) {\n\n    this.__idx__ = 0;\n\n    this.collisionObject = collisionObject || null;\n    this.transform = transform || null;\n\n    this.collisionStatus = [];\n\n    this.isGhostObject = false;\n    this.hasCallback = false;\n}\n\nvar g_objectsList = [];\nvar g_shapes = {};\n    \n// Map to store the ammo objects which key is the ptr of body\nvar g_ammoPtrIdxMap = {};\n\n// World objects\nvar g_dispatcher = null;\nvar g_world = null;\nvar g_ghostPairCallback = null;\n\n/********************************************\n            Buffer Object\n ********************************************/\n\n function g_Buffer() {\n\n    this.array = [];\n    this.offset = 0;\n}\n\ng_Buffer.prototype = {\n\n    constructor : g_Buffer,\n    \n    packScalar : function(scalar) {\n        this.array[this.offset++] = scalar;\n    },\n\n    packVector2 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n    },\n\n    packVector3 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n        this.array[this.offset++] = vector.getZ();\n    },\n\n    packVector4 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n        this.array[this.offset++] = vector.getZ();\n        this.array[this.offset++] = vector.getW();\n    },\n\n    packMatrix3x3 : function(m3x3) {\n        this.packVector3(m3x3.getColumn(0));\n        this.packVector3(m3x3.getColumn(1));\n        this.packVector3(m3x3.getColumn(2));\n    },\n\n    toFloat32Array : function() {\n        this.array.length = this.offset;\n        return new Float32Array(this.array);\n    }\n}\n\nvar g_stepBuffer = new g_Buffer();\nvar g_inertiaTensorBuffer = new g_Buffer();\nvar g_rayTestBuffer = new g_Buffer();\n\n\n/********************************************\n            Message Dispatcher\n ********************************************/\n\nonmessage = function(e) {\n    // Init the word\n    if (e.data.__init__) {\n        cmd_InitAmmo(e.data.ammoUrl, e.data.gravity);\n        return;\n    }\n\n    var buffer = new Float32Array(e.data);\n    \n    var nChunk = buffer[0];\n\n    var offset = 1;\n    var haveStep = false;\n    var stepTime, maxSubSteps, fixedTimeStep;\n    var addedCollisonObjects = [];\n    for (var i = 0; i < nChunk; i++) {\n        var cmdType = buffer[offset++];\n        // Dispatch\n        switch(cmdType) {\n            case CMD_ADD_COLLIDER:\n                offset = cmd_AddCollisionObject(buffer, offset, addedCollisonObjects);\n                break;\n            case CMD_REMOVE_COLLIDER:\n                offset = cmd_RemoveCollisionObject(buffer, offset);\n                break;\n            case CMD_MOD_COLLIDER:\n                offset = cmd_ModCollisionObject(buffer, offset);\n                break;\n            case CMD_STEP:\n                haveStep = true;\n                stepTime = buffer[offset++];\n                maxSubSteps = buffer[offset++];\n                fixedTimeStep = buffer[offset++];\n                break;\n            case CMD_RAYTEST_ALL:\n            case CMD_RAYTEST_CLOSEST:\n                offset = cmd_Raytest(buffer, offset, cmdType === CMD_RAYTEST_CLOSEST);\n                break;\n            default:\n        }\n    }\n\n    // Sync back inertia tensor\n    // Calculating torque needs this stuff\n    if (addedCollisonObjects.length > 0) { \n        g_inertiaTensorBuffer.offset = 0;\n        g_inertiaTensorBuffer.packScalar(1); // nChunk\n        g_inertiaTensorBuffer.packScalar(CMD_SYNC_INERTIA_TENSOR);   // Command\n        g_inertiaTensorBuffer.packScalar(0); // nBody\n        var nBody = 0;\n        for (var i = 0; i < addedCollisonObjects.length; i++) {\n            var co = addedCollisonObjects[i];\n            var body = co.collisionObject;\n            if (body.getInvInertiaTensorWorld) {\n                var m3x3 = body.getInvInertiaTensorWorld();\n                g_inertiaTensorBuffer.packScalar(co.__idx__);\n                g_inertiaTensorBuffer.packMatrix3x3(m3x3);\n                nBody++;\n            }\n        }\n        g_inertiaTensorBuffer.array[2] = nBody;\n        var array = g_inertiaTensorBuffer.toFloat32Array();\n        postMessage(array.buffer, [array.buffer]);\n    }\n\n    // Lazy execute\n    if (haveStep) {\n        g_stepBuffer.offset = 0;\n        cmd_Step(stepTime, maxSubSteps, fixedTimeStep);\n    }\n}\n\n/********************************************\n            Util Functions\n ********************************************/\n\nfunction _unPackVector3(buffer, offset) {\n    return new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset]);\n}\n\nfunction _setVector3(vec, buffer, offset) {\n    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n    return offset;\n}\n\nfunction _setVector4(vec, buffer, offset) {\n    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n    return offset;\n}\n\nfunction _createShape(buffer, offset) {\n    // Shape\n    var shapeId = buffer[offset++];\n    var shapeType = buffer[offset++];\n    var shape = g_shapes[shapeId];\n    if (!shape) {\n        switch(shapeType) {\n            case SHAPE_SPHERE:\n                shape = new Ammo.btSphereShape(buffer[offset++]);\n                break;\n            case SHAPE_BOX:\n                shape = new Ammo.btBoxShape(_unPackVector3(buffer, offset));\n                offset += 3;\n                break;\n            case SHAPE_CYLINDER:\n                shape = new Ammo.btCylinderShape(_unPackVector3(buffer, offset));\n                offset += 3;\n                break;\n            case SHAPE_CONE:\n                shape = new Ammo.btConeShape(buffer[offset++], buffer[offset++]);\n                break;\n            case SHAPE_CAPSULE:\n                shape = new Ammo.btCapsuleShape(buffer[offset++], buffer[offset++]);\n                break;\n            case SHAPE_CONVEX_TRIANGLE_MESH:\n            case SHAPE_BVH_TRIANGLE_MESH:\n                var nTriangles = buffer[offset++];\n                var nVertices = buffer[offset++];\n                var indexStride = 3 * 4;\n                var vertexStride = 3 * 4;\n                \n                var triangleIndices = buffer.subarray(offset, offset + nTriangles * 3);\n                offset += nTriangles * 3;\n                var indicesPtr = Ammo.allocate(indexStride * nTriangles, \'i32\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < triangleIndices.length; i++) {\n                    Ammo.setValue(indicesPtr + i * 4, triangleIndices[i], \'i32\');\n                }\n\n                var vertices = buffer.subarray(offset, offset + nVertices * 3);\n                offset += nVertices * 3;\n                var verticesPtr = Ammo.allocate(vertexStride * nVertices, \'float\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < vertices.length; i++) {\n                    Ammo.setValue(verticesPtr + i * 4, vertices[i], \'float\');\n                }\n\n                var indexVertexArray = new Ammo.btTriangleIndexVertexArray(nTriangles, indicesPtr, indexStride, nVertices, verticesPtr, vertexStride);\n                // TODO Cal AABB ?\n                if (shapeType === SHAPE_CONVEX_TRIANGLE_MESH) {\n                    shape = new Ammo.btConvexTriangleMeshShape(indexVertexArray, true);\n                } else {\n                    shape = new Ammo.btBvhTriangleMeshShape(indexVertexArray, true, true);\n                }\n                break;\n            case SHAPE_CONVEX_HULL:\n                var nPoints = buffer[offset++];\n                var stride = 3 * 4;\n                var points = buffer.subarray(offset, offset + nPoints * 3);\n                offset += nPoints * 3;\n                var pointsPtr = Ammo.allocate(stride * nPoints, \'float\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < points.length; i++) {\n                    Ammo.setValue(pointsPtr + i * 4, points[i], \'float\');\n                }\n\n                shape = new Ammo.btConvexHullShape(pointsPtr, nPoints, stride);\n                break;\n            case SHAPE_STATIC_PLANE:\n                var normal = _unPackVector3(buffer, offset);\n                offset+=3;\n                shape = new Ammo.btStaticPlaneShape(normal, buffer[offset++]);\n                break;\n            default:\n                throw new Error(\'Unknown type \' + shapeType);\n                break;\n        }\n\n        g_shapes[shapeId] = shape;\n    } else {\n        switch(shapeType) {\n            case SHAPE_SPHERE:\n                offset++;\n                break;\n            case SHAPE_BOX:\n            case SHAPE_CYLINDER:\n                offset += 3;\n                break;\n            case SHAPE_CONE:\n            case SHAPE_CAPSULE:\n                offset += 2;\n                break;\n            case SHAPE_CONVEX_TRIANGLE_MESH:\n            case SHAPE_BVH_TRIANGLE_MESH:\n                var nTriangles = buffer[offset++];\n                var nVertices = buffer[offset++];\n                offset += nTriangles * 3 + nVertices * 3;\n                break;\n            case SHAPE_CONVEX_HULL:\n                var nPoints = buffer[offset++];\n                offset += nPoints * 3;\n                break;\n            case SHAPE_STATIC_PLANE:\n                offset += 4;\n                break;\n            default:\n                throw new Error(\'Unknown type \' + shapeType);\n                break;\n        }\n    }\n\n    return [shape, offset];\n}\n\n/********************************************\n                COMMANDS\n ********************************************/\n\nfunction cmd_InitAmmo(ammoUrl, gravity) {\n    importScripts(ammoUrl);\n    if (!gravity) {\n        gravity = [0, -10, 0];\n    }\n\n    var broadphase = new Ammo.btDbvtBroadphase();\n    var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();\n    g_dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);\n    var solver = new Ammo.btSequentialImpulseConstraintSolver();\n    g_world = new Ammo.btDiscreteDynamicsWorld(g_dispatcher, broadphase, solver, collisionConfiguration);\n    g_world.setGravity(new Ammo.btVector3(gravity[0], gravity[1], gravity[2]));\n\n    postMessage({\n        __init__ : true\n    });\n}\n\nfunction cmd_AddCollisionObject(buffer, offset, out) {\n    var idx = buffer[offset++];\n    var bitMask = buffer[offset++];\n\n    var collisionFlags = buffer[offset++];\n    var isGhostObject = COLLISION_FLAG_GHOST_OBJECT & collisionFlags;\n    var hasCallback = COLLISION_FLAG_HAS_CALLBACK & collisionFlags;\n\n    var group = buffer[offset++];\n    var collisionMask = buffer[offset++];\n\n    if (MOTION_STATE_MOD_BIT & bitMask) {\n        var origin = new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset++]);\n        var quat = new Ammo.btQuaternion(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n        var transform = new Ammo.btTransform(quat, origin);\n    } else {\n        var transform = new Ammo.btTransform();\n    }\n\n    if (!isGhostObject) {\n        var motionState = new Ammo.btDefaultMotionState(transform);\n\n        if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {\n            var linearVelocity = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {\n            var angularVelocity = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {\n            var linearFactor = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {\n            var angularFactor = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {\n            // TODO\n            // centerOfMass = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.localInertia & bitMask) {\n            var localInertia = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {\n            var massAndDamping = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {\n            var totalForce = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {\n            var totalTorque = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n    }\n\n    var res = _createShape(buffer, offset);\n    var shape = res[0];\n    offset = res[1];\n\n    if (massAndDamping) {\n        var mass = massAndDamping.getX();\n    } else {\n        var mass = 0;\n    }\n\n    var physicsObject;\n    if (!isGhostObject) {\n        if (!localInertia) {\n            localInertia = new Ammo.btVector3(0, 0, 0);\n            if (mass !== 0) { // Is dynamic\n                shape.calculateLocalInertia(mass, localInertia);\n            }\n        }\n        var rigidBodyInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);\n        var rigidBody = new Ammo.btRigidBody(rigidBodyInfo);\n\n        rigidBody.setCollisionFlags(collisionFlags);\n\n        linearVelocity && rigidBody.setLinearVelocity(linearVelocity);\n        angularVelocity && rigidBody.setAngularVelocity(angularVelocity);\n        linearFactor && rigidBody.setLinearFactor(linearFactor);\n        angularFactor && rigidBody.setAngularFactor(angularFactor);\n        if (massAndDamping) {\n            rigidBody.setDamping(massAndDamping.getY(), massAndDamping.getZ());\n        }\n        totalForce && rigidBody.applyCentralForce(totalForce);\n        totalTorque && rigidBody.applyTorque(totalTorque);\n\n        rigidBody.setFriction(buffer[offset++]);\n        rigidBody.setRestitution(buffer[offset++]);\n\n        physicsObject = new PhysicsObject(rigidBody, transform);\n        physicsObject.hasCallback = hasCallback;\n        g_objectsList[idx] = physicsObject;\n        g_ammoPtrIdxMap[rigidBody.ptr] = idx;\n        // TODO\n        // g_world.addRigidBody(rigidBody, group, collisionMask);\n        g_world.addRigidBody(rigidBody);\n    } else {\n        // TODO What\'s the difference of Pair Caching Ghost Object ?\n        var ghostObject = new Ammo.btPairCachingGhostObject();\n        ghostObject.setCollisionShape(shape);\n        ghostObject.setWorldTransform(transform);\n\n        physicsObject = new PhysicsObject(ghostObject, transform);\n        physicsObject.hasCallback = hasCallback;\n        physicsObject.isGhostObject = true;\n        g_objectsList[idx] = physicsObject;\n        // TODO\n        // g_world.addCollisionObject(ghostObject, group, collisionMask);\n        g_world.addCollisionObject(ghostObject);\n\n        g_ammoPtrIdxMap[ghostObject.ptr] = idx;\n        // TODO\n        if (!g_ghostPairCallback) {\n            g_ghostPairCallback = new Ammo.btGhostPairCallback();\n            g_world.getPairCache().setInternalGhostPairCallback(g_ghostPairCallback);\n        }\n    }\n\n    physicsObject.__idx__ = idx;\n    out.push(physicsObject);\n\n    return offset;\n}\n\n\n// TODO destroy ?\nfunction cmd_RemoveCollisionObject(buffer, offset) {\n    var idx = buffer[offset++];\n    var obj = g_objectsList[idx];\n    g_objectsList[idx] = null;\n    if (obj.isGhostObject) {\n        g_world.removeCollisionObject(obj.collisionObject);\n    } else {\n        g_world.removeRigidBody(obj.collisionObject);\n    }\n    return offset;\n}\n\nfunction cmd_ModCollisionObject(buffer, offset) {\n    var idx = buffer[offset++];\n    var bitMask = buffer[offset++];\n\n    var obj = g_objectsList[idx];\n    var collisionObject = obj.collisionObject;\n    var bodyNeedsActive = false;\n\n    if (COLLISION_FLAG_MOD_BIT & bitMask) {\n        var collisionFlags = buffer[offset++];\n        collisionObject.setCollisionFlags(collisionFlags);\n\n        obj.hasCallback = collisionFlags & COLLISION_FLAG_HAS_CALLBACK;\n        obj.isGhostObject = collisionFlags & COLLISION_FLAG_GHOST_OBJECT;\n    }\n    if (MOTION_STATE_MOD_BIT & bitMask) {\n        var motionState = collisionObject.getMotionState();\n        var transform = obj.transform;\n        motionState.getWorldTransform(transform);\n        offset = _setVector3(transform.getOrigin(), buffer, offset);\n        offset = _setVector4(transform.getRotation(), buffer, offset);\n        motionState.setWorldTransform(transform);\n    }\n\n    if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {\n        offset = _setVector3(collisionObject.getLinearVelocity(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {\n        offset = _setVector3(collisionObject.getAngularVelocity(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {\n        offset = _setVector3(collisionObject.getLinearFactor(), buffer, offset);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {\n        offset = _setVector3(collisionObject.getAngularFactor(), buffer, offset);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {\n        // TODO\n        offset += 3;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.localInertia & bitMask) {\n        // TODO\n        offset += 3;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {\n        // TODO MASS\n        var mass = buffer[offset++];\n        collisionObject.setDamping(buffer[offset++], buffer[offset++]);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {\n        offset = _setVector3(collisionObject.getTotalForce(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {\n        offset = _setVector3(collisionObject.getTotalTorque(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n\n    if (bodyNeedsActive) {\n        collisionObject.activate();\n    }\n\n    // Shape\n    if (SHAPE_MOD_BIT & bitMask) {\n        var res = _createShape(buffer, offset);\n        var shape = res[0];\n        offset = res[1];\n        collisionObject.setCollisionShape(shape);\n    }\n    if (MATERIAL_MOD_BIT & bitMask) {\n        collisionObject.setFriction(buffer[offset++]);\n        collisionObject.setRestitution(buffer[offset++]);\n    }\n \n    return offset;\n}\n\nfunction cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {\n\n    var startTime = new Date().getTime();\n    g_world.stepSimulation(timeStep, maxSubSteps, fixedTimeStep);\n    var stepTime = new Date().getTime() - startTime;\n\n    var nChunk = 3;\n    g_stepBuffer.packScalar(nChunk);\n\n    // Sync Motion State\n    g_stepBuffer.packScalar(CMD_SYNC_MOTION_STATE);\n    var nObjects = 0;\n    var nObjectsOffset = g_stepBuffer.offset;\n    g_stepBuffer.packScalar(nObjects);\n\n    for (var i = 0; i < g_objectsList.length; i++) {\n        var obj = g_objectsList[i];\n        if (!obj) {\n            continue;\n        }\n        var collisionObject = obj.collisionObject;\n        if (collisionObject.isStaticOrKinematicObject()) {\n            continue;\n        }\n        // Idx\n        g_stepBuffer.packScalar(i);\n        var motionState = collisionObject.getMotionState();\n        motionState.getWorldTransform(obj.transform);\n\n        g_stepBuffer.packVector3(obj.transform.getOrigin());\n        g_stepBuffer.packVector4(obj.transform.getRotation());\n        nObjects++;\n    }\n    g_stepBuffer.array[nObjectsOffset] = nObjects;\n\n    // Return step time\n    g_stepBuffer.packScalar(CMD_STEP_TIME);\n    g_stepBuffer.packScalar(stepTime);\n\n    // Tick callback\n    _tickCallback(g_world);\n\n    var array = g_stepBuffer.toFloat32Array();\n\n    postMessage(array.buffer, [array.buffer]);\n}\n\n// nmanifolds - [idxA - idxB - ncontacts - [pA - pB - normal]... ]...\nfunction _tickCallback(world) {\n\n    g_stepBuffer.packScalar(CMD_COLLISION_CALLBACK);\n\n    var nManifolds = g_dispatcher.getNumManifolds();\n    var nCollision = 0;\n    var tickCmdOffset = g_stepBuffer.offset;\n    g_stepBuffer.packScalar(0);  //nManifolds place holder\n\n    for (var i = 0; i < nManifolds; i++) {\n        var contactManifold = g_dispatcher.getManifoldByIndexInternal(i);\n        var obAPtr = contactManifold.getBody0();\n        var obBPtr = contactManifold.getBody1();\n\n        var nContacts = contactManifold.getNumContacts();\n\n        if (nContacts > 0) {\n            var obAIdx = g_ammoPtrIdxMap[obAPtr];\n            var obBIdx = g_ammoPtrIdxMap[obBPtr];\n\n            var obA = g_objectsList[obAIdx];\n            var obB = g_objectsList[obBIdx];\n\n            if (obA.hasCallback || obB.hasCallback) {\n                var chunkStartOffset = g_stepBuffer.offset;\n                if (_packContactManifold(contactManifold, chunkStartOffset, obAIdx, obBIdx)) {\n                    nCollision++;\n                }\n            }\n        }\n    }\n\n    g_stepBuffer.array[tickCmdOffset] = nCollision;\n}\n\nfunction _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {\n    // place holder for idxA, idxB, nContacts\n    g_stepBuffer.offset += 3;\n    var nActualContacts = 0;\n    var nContacts = contactManifold.getNumContacts();\n    for (var j = 0; j < nContacts; j++) {\n        var cp = contactManifold.getContactPoint(j);\n\n        if (cp.getDistance() <= 0) {\n            var pA = cp.getPositionWorldOnA();\n            var pB = cp.getPositionWorldOnB();\n            var normal = cp.get_m_normalWorldOnB();\n\n            g_stepBuffer.packVector3(pA);\n            g_stepBuffer.packVector3(pB);\n            g_stepBuffer.packVector3(normal);\n            nActualContacts++;\n        }\n    }\n\n    if (nActualContacts > 0) {\n        g_stepBuffer.array[offset] = obAIdx;\n        g_stepBuffer.array[offset+1] = obBIdx;\n        g_stepBuffer.array[offset+2] = nActualContacts;\n\n        return true;\n    } else {\n        g_stepBuffer.offset -= 3;\n        return false;\n    }\n}\n\nvar rayStart = null;\nvar rayEnd = null;\nfunction cmd_Raytest(buffer, offset, isClosest) {\n    if (!rayStart) {\n        rayStart = new Ammo.btVector3();\n        rayEnd = new Ammo.btVector3();\n    }\n    var cbIdx = buffer[offset++];\n    rayStart.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n    rayEnd.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n\n    g_rayTestBuffer.offset = 0;\n    g_rayTestBuffer.packScalar(1);\n    g_rayTestBuffer.packScalar(isClosest ? CMD_RAYTEST_CLOSEST : CMD_RAYTEST_ALL);\n    g_rayTestBuffer.packScalar(cbIdx);\n\n    if (isClosest) {\n        var callback = new Module.ClosestRayResultCallback(rayStart, rayEnd);\n        var colliderIdx = -1;\n        g_world.rayTest(rayStart, rayEnd, callback);\n        if (callback.hasHit()) {\n            var co = callback.get_m_collisionObject();\n            colliderIdx = g_ammoPtrIdxMap[co.ptr];\n            g_rayTestBuffer.packScalar(colliderIdx);\n            // hit point\n            g_rayTestBuffer.packVector3(callback.get_m_hitPointWorld());\n            // hit normal\n            g_rayTestBuffer.packVector3(callback.get_m_hitNormalWorld());\n        }\n\n        var array = g_rayTestBuffer.toFloat32Array();\n        postMessage(array.buffer, [array.buffer]);\n    } else {\n        var callback = new Module.AllHitsRayResultCallback(rayStart, rayEnd);\n        g_world.rayTest(rayStart, rayEnd, callback);\n        if (callback.hasHit()) {\n            // TODO\n        }\n    }\n\n    return offset;\n}';});
+define('qtek-physics/AmmoEngineWorker.js',[],function () { return '\'use strict\';\n\n// TODO\n// Memory leak\n\n/********************************************\n            Global Objects\n ********************************************/\n\nfunction PhysicsObject(collisionObject, transform) {\n\n    this.__idx__ = 0;\n\n    this.collisionObject = collisionObject || null;\n    this.transform = transform || null;\n\n    this.collisionStatus = [];\n\n    this.isGhostObject = false;\n    this.hasCallback = false;\n}\n\nvar g_objectsList = [];\nvar g_shapes = {};\n    \n// Map to store the ammo objects which key is the ptr of body\nvar g_ammoPtrIdxMap = {};\n\n// World objects\nvar g_dispatcher = null;\nvar g_world = null;\nvar g_ghostPairCallback = null;\n\n/********************************************\n            Buffer Object\n ********************************************/\n\n function g_Buffer() {\n\n    this.array = [];\n    this.offset = 0;\n}\n\ng_Buffer.prototype = {\n\n    constructor : g_Buffer,\n    \n    packScalar : function(scalar) {\n        this.array[this.offset++] = scalar;\n    },\n\n    packVector2 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n    },\n\n    packVector3 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n        this.array[this.offset++] = vector.getZ();\n    },\n\n    packVector4 : function(vector) {\n        this.array[this.offset++] = vector.getX();\n        this.array[this.offset++] = vector.getY();\n        this.array[this.offset++] = vector.getZ();\n        this.array[this.offset++] = vector.getW();\n    },\n\n    packMatrix3x3 : function(m3x3) {\n        this.packVector3(m3x3.getColumn(0));\n        this.packVector3(m3x3.getColumn(1));\n        this.packVector3(m3x3.getColumn(2));\n    },\n\n    toFloat32Array : function() {\n        this.array.length = this.offset;\n        return new Float32Array(this.array);\n    }\n}\n\nvar g_stepBuffer = new g_Buffer();\nvar g_inertiaTensorBuffer = new g_Buffer();\nvar g_rayTestBuffer = new g_Buffer();\n\n\n/********************************************\n            Message Dispatcher\n ********************************************/\n\nonmessage = function(e) {\n    // Init the word\n    if (e.data.__init__) {\n        cmd_InitAmmo(e.data.ammoUrl, e.data.gravity);\n        return;\n    }\n\n    var buffer = new Float32Array(e.data);\n    \n    var nChunk = buffer[0];\n\n    var offset = 1;\n    var haveStep = false;\n    var stepTime, maxSubSteps, fixedTimeStep;\n    var addedCollisonObjects = [];\n    for (var i = 0; i < nChunk; i++) {\n        var cmdType = buffer[offset++];\n        // Dispatch\n        switch(cmdType) {\n            case CMD_ADD_COLLIDER:\n                offset = cmd_AddCollisionObject(buffer, offset, addedCollisonObjects);\n                break;\n            case CMD_REMOVE_COLLIDER:\n                offset = cmd_RemoveCollisionObject(buffer, offset);\n                break;\n            case CMD_MOD_COLLIDER:\n                offset = cmd_ModCollisionObject(buffer, offset);\n                break;\n            case CMD_STEP:\n                haveStep = true;\n                stepTime = buffer[offset++];\n                maxSubSteps = buffer[offset++];\n                fixedTimeStep = buffer[offset++];\n                break;\n            case CMD_RAYTEST_ALL:\n            case CMD_RAYTEST_CLOSEST:\n                offset = cmd_Raytest(buffer, offset, cmdType === CMD_RAYTEST_CLOSEST);\n                break;\n            default:\n        }\n    }\n\n    // Sync back inertia tensor\n    // Calculating torque needs this stuff\n    if (addedCollisonObjects.length > 0) { \n        g_inertiaTensorBuffer.offset = 0;\n        g_inertiaTensorBuffer.packScalar(1); // nChunk\n        g_inertiaTensorBuffer.packScalar(CMD_SYNC_INERTIA_TENSOR);   // Command\n        g_inertiaTensorBuffer.packScalar(0); // nBody\n        var nBody = 0;\n        for (var i = 0; i < addedCollisonObjects.length; i++) {\n            var co = addedCollisonObjects[i];\n            var body = co.collisionObject;\n            if (body.getInvInertiaTensorWorld) {\n                var m3x3 = body.getInvInertiaTensorWorld();\n                g_inertiaTensorBuffer.packScalar(co.__idx__);\n                g_inertiaTensorBuffer.packMatrix3x3(m3x3);\n                nBody++;\n            }\n        }\n        g_inertiaTensorBuffer.array[2] = nBody;\n        var array = g_inertiaTensorBuffer.toFloat32Array();\n        postMessage(array.buffer, [array.buffer]);\n    }\n\n    // Lazy execute\n    if (haveStep) {\n        g_stepBuffer.offset = 0;\n        cmd_Step(stepTime, maxSubSteps, fixedTimeStep);\n    }\n}\n\n/********************************************\n            Util Functions\n ********************************************/\n\nfunction _unPackVector3(buffer, offset) {\n    return new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset]);\n}\n\nfunction _setVector3(vec, buffer, offset) {\n    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n    return offset;\n}\n\nfunction _setVector4(vec, buffer, offset) {\n    vec.setValue(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n    return offset;\n}\n\nfunction _unPackShape(buffer, offset) {\n    // Shape\n    var shapeId = buffer[offset++];\n    var shapeType = buffer[offset++];\n    var shape = g_shapes[shapeId];\n    var isCreate;\n    if (!shape) {\n        isCreate = true;\n        switch(shapeType) {\n            case SHAPE_SPHERE:\n                shape = new Ammo.btSphereShape(buffer[offset++]);\n                break;\n            case SHAPE_BOX:\n                shape = new Ammo.btBoxShape(_unPackVector3(buffer, offset));\n                offset += 3;\n                break;\n            case SHAPE_CYLINDER:\n                shape = new Ammo.btCylinderShape(_unPackVector3(buffer, offset));\n                offset += 3;\n                break;\n            case SHAPE_CONE:\n                shape = new Ammo.btConeShape(buffer[offset++], buffer[offset++]);\n                break;\n            case SHAPE_CAPSULE:\n                shape = new Ammo.btCapsuleShape(buffer[offset++], buffer[offset++]);\n                break;\n            case SHAPE_CONVEX_TRIANGLE_MESH:\n            case SHAPE_BVH_TRIANGLE_MESH:\n                var nTriangles = buffer[offset++];\n                var nVertices = buffer[offset++];\n                var indexStride = 3 * 4;\n                var vertexStride = 3 * 4;\n                \n                var triangleIndices = buffer.subarray(offset, offset + nTriangles * 3);\n                offset += nTriangles * 3;\n                var indicesPtr = Ammo.allocate(indexStride * nTriangles, \'i32\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < triangleIndices.length; i++) {\n                    Ammo.setValue(indicesPtr + i * 4, triangleIndices[i], \'i32\');\n                }\n\n                var vertices = buffer.subarray(offset, offset + nVertices * 3);\n                offset += nVertices * 3;\n                var verticesPtr = Ammo.allocate(vertexStride * nVertices, \'float\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < vertices.length; i++) {\n                    Ammo.setValue(verticesPtr + i * 4, vertices[i], \'float\');\n                }\n\n                var indexVertexArray = new Ammo.btTriangleIndexVertexArray(nTriangles, indicesPtr, indexStride, nVertices, verticesPtr, vertexStride);\n                // TODO Cal AABB ?\n                if (shapeType === SHAPE_CONVEX_TRIANGLE_MESH) {\n                    shape = new Ammo.btConvexTriangleMeshShape(indexVertexArray, true);\n                } else {\n                    shape = new Ammo.btBvhTriangleMeshShape(indexVertexArray, true, true);\n                }\n                break;\n            case SHAPE_CONVEX_HULL:\n                var nPoints = buffer[offset++];\n                var stride = 3 * 4;\n                var points = buffer.subarray(offset, offset + nPoints * 3);\n                offset += nPoints * 3;\n                var pointsPtr = Ammo.allocate(stride * nPoints, \'float\', Ammo.ALLOC_NORMAL);\n                for (var i = 0; i < points.length; i++) {\n                    Ammo.setValue(pointsPtr + i * 4, points[i], \'float\');\n                }\n\n                shape = new Ammo.btConvexHullShape(pointsPtr, nPoints, stride);\n                break;\n            case SHAPE_STATIC_PLANE:\n                var normal = _unPackVector3(buffer, offset);\n                offset+=3;\n                shape = new Ammo.btStaticPlaneShape(normal, buffer[offset++]);\n                break;\n            case SHAPE_COMPOUND:\n                var nChildren = buffer[offset++];\n                var shape = new Ammo.btCompoundShape();\n                for (var i = 0; i < nChildren; i++) {\n                    var origin = new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset++]);\n                    var rotation = new Ammo.btQuaternion(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n                    var res = _unPackShape(buffer, offset);\n                    var childShape = res[0];\n                    offset = res[1];\n                    var transform = new Ammo.btTransform(rotation, origin);\n                    shape.addChildShape(transform, childShape);\n                }\n                break;\n            default:\n                throw new Error(\'Unknown type \' + shapeType);\n                break;\n        }\n\n        g_shapes[shapeId] = shape;\n    } else {\n        isCreate = false;\n        switch(shapeType) {\n            case SHAPE_SPHERE:\n                offset++;\n                break;\n            case SHAPE_BOX:\n            case SHAPE_CYLINDER:\n                offset += 3;\n                break;\n            case SHAPE_CONE:\n            case SHAPE_CAPSULE:\n                offset += 2;\n                break;\n            case SHAPE_CONVEX_TRIANGLE_MESH:\n            case SHAPE_BVH_TRIANGLE_MESH:\n                var nTriangles = buffer[offset++];\n                var nVertices = buffer[offset++];\n                offset += nTriangles * 3 + nVertices * 3;\n                break;\n            case SHAPE_CONVEX_HULL:\n                var nPoints = buffer[offset++];\n                offset += nPoints * 3;\n                break;\n            case SHAPE_STATIC_PLANE:\n                offset += 4;\n                break;\n            case SHAPE_COMPOUND:\n                // TODO when children are changed\n                var nChildren = buffer[offset++];\n                for (var i = 0; i < nChildren; i++) {\n                    offset += 7;\n                    var res = _unPackShape(buffer, offset);\n                    var childShape = res[0];\n                    offset = res[1];\n                }\n                break;\n            default:\n                throw new Error(\'Unknown type \' + shapeType);\n                break;\n        }\n    }\n\n    return [shape, offset, isCreate];\n}\n\n/********************************************\n                COMMANDS\n ********************************************/\n\nfunction cmd_InitAmmo(ammoUrl, gravity) {\n    importScripts(ammoUrl);\n    if (!gravity) {\n        gravity = [0, -10, 0];\n    }\n\n    var broadphase = new Ammo.btDbvtBroadphase();\n    var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();\n    g_dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);\n    var solver = new Ammo.btSequentialImpulseConstraintSolver();\n    g_world = new Ammo.btDiscreteDynamicsWorld(g_dispatcher, broadphase, solver, collisionConfiguration);\n    g_world.setGravity(new Ammo.btVector3(gravity[0], gravity[1], gravity[2]));\n\n    postMessage({\n        __init__ : true\n    });\n}\n\nfunction cmd_AddCollisionObject(buffer, offset, out) {\n    var idx = buffer[offset++];\n    var bitMask = buffer[offset++];\n\n    var collisionFlags = buffer[offset++];\n    var isGhostObject = COLLISION_FLAG_GHOST_OBJECT & collisionFlags;\n    var hasCallback = COLLISION_FLAG_HAS_CALLBACK & collisionFlags;\n\n    var group = buffer[offset++];\n    var collisionMask = buffer[offset++];\n\n    if (MOTION_STATE_MOD_BIT & bitMask) {\n        var origin = new Ammo.btVector3(buffer[offset++], buffer[offset++], buffer[offset++]);\n        var quat = new Ammo.btQuaternion(buffer[offset++], buffer[offset++], buffer[offset++], buffer[offset++]);\n        var transform = new Ammo.btTransform(quat, origin);\n    } else {\n        var transform = new Ammo.btTransform();\n    }\n\n    if (!isGhostObject) {\n        var motionState = new Ammo.btDefaultMotionState(transform);\n\n        if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {\n            var linearVelocity = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {\n            var angularVelocity = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {\n            var linearFactor = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {\n            var angularFactor = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {\n            // TODO\n            // centerOfMass = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.localInertia & bitMask) {\n            var localInertia = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {\n            var massAndDamping = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {\n            var totalForce = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n        if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {\n            var totalTorque = _unPackVector3(buffer, offset);\n            offset += 3;\n        }\n    }\n\n    var res = _unPackShape(buffer, offset);\n    var shape = res[0];\n    offset = res[1];\n\n    if (massAndDamping) {\n        var mass = massAndDamping.getX();\n    } else {\n        var mass = 0;\n    }\n\n    var physicsObject;\n    if (!isGhostObject) {\n        if (!localInertia) {\n            localInertia = new Ammo.btVector3(0, 0, 0);\n            if (mass !== 0) { // Is dynamic\n                shape.calculateLocalInertia(mass, localInertia);\n            }\n        }\n        var rigidBodyInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);\n        var rigidBody = new Ammo.btRigidBody(rigidBodyInfo);\n\n        rigidBody.setCollisionFlags(collisionFlags);\n\n        linearVelocity && rigidBody.setLinearVelocity(linearVelocity);\n        angularVelocity && rigidBody.setAngularVelocity(angularVelocity);\n        linearFactor && rigidBody.setLinearFactor(linearFactor);\n        angularFactor && rigidBody.setAngularFactor(angularFactor);\n        if (massAndDamping) {\n            rigidBody.setDamping(massAndDamping.getY(), massAndDamping.getZ());\n        }\n        totalForce && rigidBody.applyCentralForce(totalForce);\n        totalTorque && rigidBody.applyTorque(totalTorque);\n\n        rigidBody.setFriction(buffer[offset++]);\n        rigidBody.setRestitution(buffer[offset++]);\n\n        physicsObject = new PhysicsObject(rigidBody, transform);\n        physicsObject.hasCallback = hasCallback;\n        g_objectsList[idx] = physicsObject;\n        g_ammoPtrIdxMap[rigidBody.ptr] = idx;\n        // TODO\n        // g_world.addRigidBody(rigidBody, group, collisionMask);\n        g_world.addRigidBody(rigidBody);\n    } else {\n        // TODO What\'s the difference of Pair Caching Ghost Object ?\n        var ghostObject = new Ammo.btPairCachingGhostObject();\n        ghostObject.setCollisionShape(shape);\n        ghostObject.setWorldTransform(transform);\n\n        physicsObject = new PhysicsObject(ghostObject, transform);\n        physicsObject.hasCallback = hasCallback;\n        physicsObject.isGhostObject = true;\n        g_objectsList[idx] = physicsObject;\n        // TODO\n        // g_world.addCollisionObject(ghostObject, group, collisionMask);\n        g_world.addCollisionObject(ghostObject);\n\n        g_ammoPtrIdxMap[ghostObject.ptr] = idx;\n        // TODO\n        if (!g_ghostPairCallback) {\n            g_ghostPairCallback = new Ammo.btGhostPairCallback();\n            g_world.getPairCache().setInternalGhostPairCallback(g_ghostPairCallback);\n        }\n    }\n\n    physicsObject.__idx__ = idx;\n    out.push(physicsObject);\n\n    return offset;\n}\n\n\nfunction cmd_RemoveCollisionObject(buffer, offset) {\n    var idx = buffer[offset++];\n    var obj = g_objectsList[idx];\n    g_objectsList[idx] = null;\n    if (obj.isGhostObject) {\n        g_world.removeCollisionObject(obj.collisionObject);\n    } else {\n        g_world.removeRigidBody(obj.collisionObject);\n    }\n    // TODO destroy ?\n    Ammo.destroy(obj.collisionObject);\n    return offset;\n}\n\nfunction cmd_ModCollisionObject(buffer, offset) {\n    var idx = buffer[offset++];\n    var bitMask = buffer[offset++];\n\n    var obj = g_objectsList[idx];\n    var collisionObject = obj.collisionObject;\n    var bodyNeedsActive = false;\n\n    if (COLLISION_FLAG_MOD_BIT & bitMask) {\n        var collisionFlags = buffer[offset++];\n        collisionObject.setCollisionFlags(collisionFlags);\n\n        obj.hasCallback = collisionFlags & COLLISION_FLAG_HAS_CALLBACK;\n        obj.isGhostObject = collisionFlags & COLLISION_FLAG_GHOST_OBJECT;\n    }\n    if (MOTION_STATE_MOD_BIT & bitMask) {\n        var motionState = collisionObject.getMotionState();\n        var transform = obj.transform;\n        motionState.getWorldTransform(transform);\n        offset = _setVector3(transform.getOrigin(), buffer, offset);\n        offset = _setVector4(transform.getRotation(), buffer, offset);\n        motionState.setWorldTransform(transform);\n    }\n\n    if (RIGID_BODY_PROP_MOD_BIT.linearVelocity & bitMask) {\n        offset = _setVector3(collisionObject.getLinearVelocity(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.angularVelocity & bitMask) {\n        offset = _setVector3(collisionObject.getAngularVelocity(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.linearFactor & bitMask) {\n        offset = _setVector3(collisionObject.getLinearFactor(), buffer, offset);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.angularFactor & bitMask) {\n        offset = _setVector3(collisionObject.getAngularFactor(), buffer, offset);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.centerOfMass & bitMask) {\n        // TODO\n        offset += 3;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.localInertia & bitMask) {\n        // TODO\n        offset += 3;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.massAndDamping & bitMask) {\n        // TODO MASS\n        var mass = buffer[offset++];\n        collisionObject.setDamping(buffer[offset++], buffer[offset++]);\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.totalForce & bitMask) {\n        offset = _setVector3(collisionObject.getTotalForce(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n    if (RIGID_BODY_PROP_MOD_BIT.totalTorque & bitMask) {\n        offset = _setVector3(collisionObject.getTotalTorque(), buffer, offset);\n        bodyNeedsActive = true;\n    }\n\n    if (bodyNeedsActive) {\n        collisionObject.activate();\n    }\n\n    // Shape\n    if (SHAPE_MOD_BIT & bitMask) {\n        // TODO\n        // destroy child shapes of compound shape\n        var shapeId = buffer[offset];\n        var shape = g_shapes[shapeId];\n        Ammo.destroy(shape);\n        g_shapes[shapeId] = null;\n\n        var res = _unPackShape(buffer, offset);\n        var shape = res[0];\n        offset = res[1];\n        collisionObject.setCollisionShape(shape);\n    }\n    if (MATERIAL_MOD_BIT & bitMask) {\n        collisionObject.setFriction(buffer[offset++]);\n        collisionObject.setRestitution(buffer[offset++]);\n    }\n \n    return offset;\n}\n\nfunction cmd_Step(timeStep, maxSubSteps, fixedTimeStep) {\n\n    var startTime = new Date().getTime();\n    g_world.stepSimulation(timeStep, maxSubSteps, fixedTimeStep);\n    var stepTime = new Date().getTime() - startTime;\n\n    var nChunk = 3;\n    g_stepBuffer.packScalar(nChunk);\n\n    // Sync Motion State\n    g_stepBuffer.packScalar(CMD_SYNC_MOTION_STATE);\n    var nObjects = 0;\n    var nObjectsOffset = g_stepBuffer.offset;\n    g_stepBuffer.packScalar(nObjects);\n\n    for (var i = 0; i < g_objectsList.length; i++) {\n        var obj = g_objectsList[i];\n        if (!obj) {\n            continue;\n        }\n        var collisionObject = obj.collisionObject;\n        if (collisionObject.isStaticOrKinematicObject()) {\n            continue;\n        }\n        // Idx\n        g_stepBuffer.packScalar(i);\n        var motionState = collisionObject.getMotionState();\n        motionState.getWorldTransform(obj.transform);\n\n        g_stepBuffer.packVector3(obj.transform.getOrigin());\n        g_stepBuffer.packVector4(obj.transform.getRotation());\n        nObjects++;\n    }\n    g_stepBuffer.array[nObjectsOffset] = nObjects;\n\n    // Return step time\n    g_stepBuffer.packScalar(CMD_STEP_TIME);\n    g_stepBuffer.packScalar(stepTime);\n\n    // Tick callback\n    _tickCallback(g_world);\n\n    var array = g_stepBuffer.toFloat32Array();\n\n    postMessage(array.buffer, [array.buffer]);\n}\n\n// nmanifolds - [idxA - idxB - ncontacts - [pA - pB - normal]... ]...\nfunction _tickCallback(world) {\n\n    g_stepBuffer.packScalar(CMD_COLLISION_CALLBACK);\n\n    var nManifolds = g_dispatcher.getNumManifolds();\n    var nCollision = 0;\n    var tickCmdOffset = g_stepBuffer.offset;\n    g_stepBuffer.packScalar(0);  //nManifolds place holder\n\n    for (var i = 0; i < nManifolds; i++) {\n        var contactManifold = g_dispatcher.getManifoldByIndexInternal(i);\n        var obAPtr = contactManifold.getBody0();\n        var obBPtr = contactManifold.getBody1();\n\n        var nContacts = contactManifold.getNumContacts();\n\n        if (nContacts > 0) {\n            var obAIdx = g_ammoPtrIdxMap[obAPtr];\n            var obBIdx = g_ammoPtrIdxMap[obBPtr];\n\n            var obA = g_objectsList[obAIdx];\n            var obB = g_objectsList[obBIdx];\n\n            if (obA.hasCallback || obB.hasCallback) {\n                var chunkStartOffset = g_stepBuffer.offset;\n                if (_packContactManifold(contactManifold, chunkStartOffset, obAIdx, obBIdx)) {\n                    nCollision++;\n                }\n            }\n        }\n    }\n\n    g_stepBuffer.array[tickCmdOffset] = nCollision;\n}\n\nfunction _packContactManifold(contactManifold, offset, obAIdx, obBIdx) {\n    // place holder for idxA, idxB, nContacts\n    g_stepBuffer.offset += 3;\n    var nActualContacts = 0;\n    var nContacts = contactManifold.getNumContacts();\n    for (var j = 0; j < nContacts; j++) {\n        var cp = contactManifold.getContactPoint(j);\n\n        if (cp.getDistance() <= 0) {\n            var pA = cp.getPositionWorldOnA();\n            var pB = cp.getPositionWorldOnB();\n            var normal = cp.get_m_normalWorldOnB();\n\n            g_stepBuffer.packVector3(pA);\n            g_stepBuffer.packVector3(pB);\n            g_stepBuffer.packVector3(normal);\n            nActualContacts++;\n        }\n    }\n\n    if (nActualContacts > 0) {\n        g_stepBuffer.array[offset] = obAIdx;\n        g_stepBuffer.array[offset+1] = obBIdx;\n        g_stepBuffer.array[offset+2] = nActualContacts;\n\n        return true;\n    } else {\n        g_stepBuffer.offset -= 3;\n        return false;\n    }\n}\n\nvar rayStart = null;\nvar rayEnd = null;\nfunction cmd_Raytest(buffer, offset, isClosest) {\n    if (!rayStart) {\n        rayStart = new Ammo.btVector3();\n        rayEnd = new Ammo.btVector3();\n    }\n    var cbIdx = buffer[offset++];\n    rayStart.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n    rayEnd.setValue(buffer[offset++], buffer[offset++], buffer[offset++]);\n\n    g_rayTestBuffer.offset = 0;\n    g_rayTestBuffer.packScalar(1);\n    g_rayTestBuffer.packScalar(isClosest ? CMD_RAYTEST_CLOSEST : CMD_RAYTEST_ALL);\n    g_rayTestBuffer.packScalar(cbIdx);\n\n    if (isClosest) {\n        var callback = new Module.ClosestRayResultCallback(rayStart, rayEnd);\n        var colliderIdx = -1;\n        g_world.rayTest(rayStart, rayEnd, callback);\n        if (callback.hasHit()) {\n            var co = callback.get_m_collisionObject();\n            colliderIdx = g_ammoPtrIdxMap[co.ptr];\n            g_rayTestBuffer.packScalar(colliderIdx);\n            // hit point\n            g_rayTestBuffer.packVector3(callback.get_m_hitPointWorld());\n            // hit normal\n            g_rayTestBuffer.packVector3(callback.get_m_hitNormalWorld());\n        }\n\n        var array = g_rayTestBuffer.toFloat32Array();\n        postMessage(array.buffer, [array.buffer]);\n    } else {\n        var callback = new Module.AllHitsRayResultCallback(rayStart, rayEnd);\n        g_world.rayTest(rayStart, rayEnd, callback);\n        if (callback.hasHit()) {\n            // TODO\n        }\n    }\n\n    return offset;\n}';});
 
-define('qtek/physics/Shape',['require','qtek/core/Base'],function(require) {
+define('qtek-physics/Shape',['require','qtek/core/Base'],function(require) {
 
     
     
@@ -5353,7 +6011,7 @@ define('qtek/physics/Shape',['require','qtek/core/Base'],function(require) {
 
     return Shape;
 });
-define('qtek/physics/shape/Box',['require','../Shape','qtek/math/Vector3'],function(require) {
+define('qtek-physics/shape/Box',['require','../Shape','qtek/math/Vector3'],function(require) {
 
     
     
@@ -5402,7 +6060,7 @@ define('qtek/physics/shape/Box',['require','../Shape','qtek/math/Vector3'],funct
 
     return BoxShape;
 });
-define('qtek/physics/shape/Capsule',['require','../Shape','qtek/math/Vector3'],function (require) {
+define('qtek-physics/shape/Capsule',['require','../Shape','qtek/math/Vector3'],function (require) {
     
     
     
@@ -5450,7 +6108,7 @@ define('qtek/physics/shape/Capsule',['require','../Shape','qtek/math/Vector3'],f
 
     return CapsuleShape;
 });
-define('qtek/physics/shape/Cone',['require','../Shape','qtek/math/Vector3'],function (require) {
+define('qtek-physics/shape/Cone',['require','../Shape','qtek/math/Vector3'],function (require) {
     
     
     
@@ -5487,7 +6145,7 @@ define('qtek/physics/shape/Cone',['require','../Shape','qtek/math/Vector3'],func
 
     return ConeShape;
 });
-define('qtek/physics/shape/Cylinder',['require','../Shape','qtek/math/Vector3'],function (require) {
+define('qtek-physics/shape/Cylinder',['require','../Shape','qtek/math/Vector3'],function (require) {
     
     
     
@@ -5556,7 +6214,7 @@ define('qtek/physics/shape/Cylinder',['require','../Shape','qtek/math/Vector3'],
 
     return CylinderShape;
 });
-define('qtek/physics/shape/Sphere',['require','../Shape'],function (require) {
+define('qtek-physics/shape/Sphere',['require','../Shape'],function (require) {
     
     
     
@@ -5583,25 +6241,53 @@ define('qtek/physics/shape/Sphere',['require','../Shape'],function (require) {
 });
 define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
 
+    
+
     var Vector3 = require('./Vector3');
     var glmatrix = require('glmatrix');
     var vec3 = glmatrix.vec3;
     var mat4 = glmatrix.mat4;
     var vec4 = glmatrix.vec4;
 
+    /**
+     * @constructor
+     * @alias qtek.math.Plane
+     * @param {qtek.math.Vector3} [normal]
+     * @param {number} [distance]
+     */
     var Plane = function(normal, distance) {
+        /**
+         * Normal of the plane
+         * @type {qtek.math.Vector3}
+         */
         this.normal = normal || new Vector3(0, 1, 0);
+
+        /**
+         * Constant of the plane equation, used as distance to the origin
+         * @type {number}
+         */
         this.distance = distance || 0;
-    }
+    };
 
     Plane.prototype = {
 
         constructor : Plane,
 
+        /**
+         * Distance from given point to plane
+         * @param  {qtek.math.Vector3} point
+         * @return {number}
+         */
         distanceToPoint : function(point) {
             return vec3.dot(point._array, this.normal._array) - this.distance;
         },
 
+        /**
+         * Calculate the projection on the plane of point
+         * @param  {qtek.math.Vector3} point
+         * @param  {qtek.math.Vector3} out
+         * @return {qtek.math.Vector3}
+         */
         projectPoint : function(point, out) {
             if (!out) {
                 out = new Vector3();
@@ -5612,14 +6298,20 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
             return out;
         },
 
+        /**
+         * Normalize the plane's normal and calculate distance
+         */
         normalize : function() {
             var invLen = 1 / vec3.len(this.normal._array);
             vec3.scale(this.normal._array, invLen);
             this.distance *= invLen;
-
-            return this;
         },
 
+        /**
+         * If the plane intersect a frustum
+         * @param  {qtek.math.Frustum} Frustum
+         * @return {boolean}
+         */
         intersectFrustum : function(frustum) {
             // Check if all coords of frustum is on plane all under plane
             var coords = frustum.vertices;
@@ -5632,6 +6324,14 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
             }
         },
 
+        /**
+         * Calculate the intersection point between plane and a given line
+         * @method
+         * @param {qtek.math.Vector3} start start point of line
+         * @param {qtek.math.Vector3} end end point of line
+         * @param {qtek.math.Vector3} [out]
+         * @return {qtek.math.Vector3}
+         */
         intersectLine : (function() {
             var rd = vec3.create();
             return function(start, end, out) {
@@ -5650,7 +6350,7 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
 
                 var divider = vec3.dot(pn, rd);
                 // ray is parallel to the plane
-                if (divider == 0) {
+                if (divider === 0) {
                     return null;
                 }
                 if (!out) {
@@ -5663,6 +6363,11 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
             };
         })(),
 
+        /**
+         * Apply an affine transform matrix to plane
+         * @method
+         * @return {qtek.math.Matrix4}
+         */
         applyTransform : (function() {
             var inverseTranspose = mat4.create();
             var normalv4 = vec4.create();
@@ -5681,28 +6386,33 @@ define('qtek/math/Plane',['require','./Vector3','glmatrix'],function(require) {
                 vec3.copy(normalv4, this.normal._array);
                 vec4.transformMat4(normalv4, normalv4, inverseTranspose);
                 vec3.copy(this.normal._array, normalv4);
-
-                return this;
-            }
+            };
         })(),
 
+        /**
+         * Copy from another plane
+         * @param  {qtek.math.Vector3} plane
+         */
         copy : function(plane) {
             vec3.copy(this.normal._array, plane.normal._array);
             this.normal._dirty = true;
             this.distance = plane.distance;
-            return this;
         },
 
+        /**
+         * Clone a new plane
+         * @return {qtek.math.Plane}
+         */
         clone : function() {
             var plane = new Plane();
             plane.copy(this);
             return plane;
         }
-    }
+    };
 
     return Plane;
 });
-define('qtek/physics/shape/StaticPlane',['require','../Shape','qtek/math/Plane'],function(require) {
+define('qtek-physics/shape/StaticPlane',['require','../Shape','qtek/math/Plane'],function(require) {
     
     
     
@@ -5724,7 +6434,7 @@ define('qtek/physics/shape/StaticPlane',['require','../Shape','qtek/math/Plane']
 
     return StaticPlaneShape;
 });
-define('qtek/physics/shape/ConvexTriangleMesh',['require','../Shape'],function (require) {
+define('qtek-physics/shape/ConvexTriangleMesh',['require','../Shape'],function (require) {
     
     
     
@@ -5736,7 +6446,7 @@ define('qtek/physics/shape/ConvexTriangleMesh',['require','../Shape'],function (
 
     return ConvexTriangleMeshShape;
 });
-define('qtek/physics/shape/BvhTriangleMesh',['require','../Shape'],function (require) {
+define('qtek-physics/shape/BvhTriangleMesh',['require','../Shape'],function (require) {
     
     
     
@@ -5748,7 +6458,7 @@ define('qtek/physics/shape/BvhTriangleMesh',['require','../Shape'],function (req
 
     return BvhTriangleMeshShape;
 });
-define('qtek/physics/shape/ConvexHull',['require','../Shape'],function (require) {
+define('qtek-physics/shape/ConvexHull',['require','../Shape'],function (require) {
     
     
     
@@ -5760,7 +6470,755 @@ define('qtek/physics/shape/ConvexHull',['require','../Shape'],function (require)
 
     return ConvexHullShape;
 });
-define('qtek/physics/Pool',['require'],function (require) {
+define('qtek/math/Quaternion',['require','glmatrix'],function(require) {
+
+    
+
+    var glMatrix = require('glmatrix');
+    var quat = glMatrix.quat;
+
+    /**
+     * @constructor
+     * @alias qtek.math.Quaternion
+     * @param {number} x
+     * @param {number} y
+     * @param {number} z
+     * @param {number} w
+     */
+    var Quaternion = function(x, y, z, w) {
+
+        x = x || 0;
+        y = y || 0;
+        z = z || 0;
+        w = w === undefined ? 1 : w;
+
+        /**
+         * Storage of Quaternion, read and write of x, y, z, w will change the values in _array
+         * All methods also operate on the _array instead of x, y, z, w components
+         * @type {Float32Array}
+         */
+        this._array = quat.fromValues(x, y, z, w);
+
+        /**
+         * Dirty flag is used by the Node to determine
+         * if the matrix is updated to latest
+         * @type {boolean}
+         */
+        this._dirty = true;
+    };
+
+    Quaternion.prototype = {
+
+        constructor : Quaternion,
+
+        /**
+         * @name x
+         * @type {number}
+         * @memberOf qtek.math.Quaternion
+         * @instance
+         */
+        get x() {
+            return this._array[0];
+        },
+
+        set x(value) {
+            this._array[0] = value;
+            this._dirty = true;
+        },
+
+        /**
+         * @name y
+         * @type {number}
+         * @memberOf qtek.math.Quaternion
+         * @instance
+         */
+        get y() {
+            return this._array[1];
+        },
+
+        set y(value) {
+            this._array[1] = value;
+            this._dirty = true;
+        },
+
+        /**
+         * @name z
+         * @type {number}
+         * @memberOf qtek.math.Quaternion
+         * @instance
+         */
+        get z() {
+            return this._array[2];
+        },
+
+        set z(value) {
+            this._array[2] = value;
+            this._dirty = true;
+        },
+
+        /**
+         * @name w
+         * @type {number}
+         * @memberOf qtek.math.Quaternion
+         * @instance
+         */
+        get w() {
+            return this._array[3];
+        },
+
+        set w(value) {
+            this._array[3] = value;
+            this._dirty = true;
+        },
+
+        /**
+         * Add b to self
+         * @param  {qtek.math.Quaternion} b
+         * @return {qtek.math.Quaternion}
+         */
+        add : function(b) {
+            quat.add( this._array, this._array, b._array );
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Calculate the w component from x, y, z component
+         * @return {qtek.math.Quaternion}
+         */
+        calculateW : function() {
+            quat.calculateW(this._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Set x, y and z components
+         * @param  {number}  x
+         * @param  {number}  y
+         * @param  {number}  z
+         * @param  {number}  w
+         * @return {qtek.math.Quaternion}
+         */
+        set : function(x, y, z, w) {
+            this._array[0] = x;
+            this._array[1] = y;
+            this._array[2] = z;
+            this._array[3] = w;
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Set x, y, z and w components from array
+         * @param  {Float32Array|number[]} arr
+         * @return {qtek.math.Quaternion}
+         */
+        setArray : function(arr) {
+            this._array[0] = arr[0];
+            this._array[1] = arr[1];
+            this._array[2] = arr[2];
+            this._array[3] = arr[3];
+
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Clone a new Quaternion
+         * @return {qtek.math.Quaternion}
+         */
+        clone : function() {
+            return new Quaternion( this.x, this.y, this.z, this.w );
+        },
+
+        /**
+         * Calculates the conjugate of self If the quaternion is normalized, 
+         * this function is faster than invert and produces the same result.
+         * 
+         * @return {qtek.math.Quaternion}
+         */
+        conjugate : function() {
+            quat.conjugate(this._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Copy from b
+         * @param  {qtek.math.Quaternion} b
+         * @return {qtek.math.Quaternion}
+         */
+        copy : function(b) {
+            quat.copy(this._array, b._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Dot product of self and b
+         * @param  {qtek.math.Quaternion} b
+         * @return {number}
+         */
+        dot : function(b) {
+            return quat.dot(this._array, b._array);
+        },
+
+        /**
+         * Set from the given 3x3 rotation matrix
+         * @param  {qtek.math.Matrix3} m
+         * @return {qtek.math.Quaternion}
+         */
+        fromMat3 : function(m) {
+            quat.fromMat3(this._array, m._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Set from the given 4x4 rotation matrix
+         * The 4th column and 4th row will be droped
+         * @param  {qtek.math.Matrix4} m
+         * @return {qtek.math.Quaternion}
+         */
+        fromMat4 : (function() {
+            var mat3 = glMatrix.mat3;
+            var m3 = mat3.create();
+            return function(m) {
+                mat3.fromMat4(m3, m._array);
+                // TODO Not like mat4, mat3 in glmatrix seems to be row-based
+                mat3.transpose(m3, m3);
+                quat.fromMat3(this._array, m3);
+                this._dirty = true;
+                return this;
+            };
+        })(),
+
+        /**
+         * Set to identity quaternion
+         * @return {qtek.math.Quaternion}
+         */
+        identity : function() {
+            quat.identity(this._array);
+            this._dirty = true;
+            return this;
+        },
+        /**
+         * Invert self
+         * @return {qtek.math.Quaternion}
+         */
+        invert : function() {
+            quat.invert(this._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+        /**
+         * Alias of length
+         * @return {number}
+         */
+        len : function() {
+            return quat.len(this._array);
+        },
+
+        /**
+         * Calculate the length
+         * @return {number}
+         */
+        length : function() {
+            return quat.length(this._array);
+        },
+
+        /**
+         * Linear interpolation between a and b
+         * @param  {qtek.math.Quaternion} a
+         * @param  {qtek.math.Quaternion} b
+         * @param  {number}  t
+         * @return {qtek.math.Quaternion}
+         */
+        lerp : function(a, b, t) {
+            quat.lerp(this._array, a._array, b._array, t);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Alias for multiply
+         * @param  {qtek.math.Quaternion} b
+         * @return {qtek.math.Quaternion}
+         */
+        mul : function(b) {
+            quat.mul(this._array, this._array, b._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Alias for multiplyLeft
+         * @param  {qtek.math.Quaternion} a
+         * @return {qtek.math.Quaternion}
+         */
+        mulLeft : function(a) {
+            quat.multiply(this._array, a._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Mutiply self and b
+         * @param  {qtek.math.Quaternion} b
+         * @return {qtek.math.Quaternion}
+         */
+        multiply : function(b) {
+            quat.multiply(this._array, this._array, b._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Mutiply a and self
+         * Quaternion mutiply is not commutative, so the result of mutiplyLeft is different with multiply.
+         * @param  {qtek.math.Quaternion} a
+         * @return {qtek.math.Quaternion}
+         */
+        multiplyLeft : function(a) {
+            quat.multiply(this._array, a._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Normalize self
+         * @return {qtek.math.Quaternion}
+         */
+        normalize : function() {
+            quat.normalize(this._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Rotate self by a given radian about X axis
+         * @param {number} rad
+         * @return {qtek.math.Quaternion}
+         */
+        rotateX : function(rad) {
+            quat.rotateX(this._array, this._array, rad); 
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Rotate self by a given radian about Y axis
+         * @param {number} rad
+         * @return {qtek.math.Quaternion}
+         */
+        rotateY : function(rad) {
+            quat.rotateY(this._array, this._array, rad);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Rotate self by a given radian about Z axis
+         * @param {number} rad
+         * @return {qtek.math.Quaternion}
+         */
+        rotateZ : function(rad) {
+            quat.rotateZ(this._array, this._array, rad);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Sets self to represent the shortest rotation from Vector3 a to Vector3 b.
+         * a and b needs to be normalized
+         * @param  {qtek.math.Vector3} a
+         * @param  {qtek.math.Vector3} b
+         * @return {qtek.math.Quaternion}
+         */
+        rotationTo : function(a, b) {
+            quat.rotationTo(this._array, a._array, b._array);
+            this._dirty = true;
+            return this;
+        },
+        /**
+         * Sets self with values corresponding to the given axes
+         * @param {qtek.math.Vector3} view
+         * @param {qtek.math.Vector3} right
+         * @param {qtek.math.Vector3} up
+         * @return {qtek.math.Quaternion}
+         */
+        setAxes : function(view, right, up) {
+            quat.setAxes(this._array, view._array, right._array, up._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Sets self with a rotation axis and rotation angle
+         * @param {qtek.math.Vector3} axis
+         * @param {number} rad
+         * @return {qtek.math.Quaternion}
+         */
+        setAxisAngle : function(axis, rad) {
+            quat.setAxisAngle(this._array, axis._array, rad);
+            this._dirty = true;
+            return this;
+        },
+        /**
+         * Perform spherical linear interpolation between a and b
+         * @param  {qtek.math.Quaternion} a
+         * @param  {qtek.math.Quaternion} b
+         * @param  {number} t
+         * @return {qtek.math.Quaternion}
+         */
+        slerp : function(a, b, t) {
+            quat.slerp(this._array, a._array, b._array, t);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Alias for squaredLength
+         * @return {number}
+         */
+        sqrLen : function() {
+            return quat.sqrLen(this._array);
+        },
+
+        /**
+         * Squared length of self
+         * @return {number}
+         */
+        squaredLength : function() {
+            return quat.squaredLength(this._array);
+        },
+
+        // Set quaternion from euler angle
+        setFromEuler : function(v) {
+            
+        },
+
+        toString : function() {
+            return '[' + Array.prototype.join.call(this._array, ',') + ']';
+        }
+    };
+
+    // Supply methods that are not in place
+    
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {qtek.math.Quaternion} b
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.add = function(out, a, b) {
+        quat.add(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {number}     x
+     * @param  {number}     y
+     * @param  {number}     z
+     * @param  {number}     w
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.set = function(out, x, y, z, w) {
+        quat.set(out._array, x, y, z, w);
+        out._dirty = true;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} b
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.copy = function(out, b) {
+        quat.copy(out._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.calculateW = function(out, a) {
+        quat.calculateW(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.conjugate = function(out, a) {
+        quat.conjugate(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.identity = function(out) {
+        quat.identity(out._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.invert = function(out, a) {
+        quat.invert(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} a
+     * @param  {qtek.math.Quaternion} b
+     * @return {number}
+     */
+    Quaternion.dot = function(a, b) {
+        return quat.dot(a._array, b._array);
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} a
+     * @return {number}
+     */
+    Quaternion.len = function(a) {
+        return quat.length(a._array);
+    };
+
+    // Quaternion.length = Quaternion.len;
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {qtek.math.Quaternion} b
+     * @param  {number}     t
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.lerp = function(out, a, b, t) {
+        quat.lerp(out._array, a._array, b._array, t);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {qtek.math.Quaternion} b
+     * @param  {number}     t
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.slerp = function(out, a, b, t) {
+        quat.slerp(out._array, a._array, b._array, t);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {qtek.math.Quaternion} b
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.mul = function(out, a, b) {
+        quat.multiply(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @method
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {qtek.math.Quaternion} b
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.multiply = Quaternion.mul;
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {number}     rad
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.rotateX = function(out, a, rad) {
+        quat.rotateX(out._array, a._array, rad);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {number}     rad
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.rotateY = function(out, a, rad) {
+        quat.rotateY(out._array, a._array, rad);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @param  {number}     rad
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.rotateZ = function(out, a, rad) {
+        quat.rotateZ(out._array, a._array, rad);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Vector3}    axis
+     * @param  {number}     rad
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.setAxisAngle = function(out, axis, rad) {
+        quat.setAxisAngle(out._array, axis._array, rad);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Quaternion} a
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.normalize = function(out, a) {
+        quat.normalize(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} a
+     * @return {number}
+     */
+    Quaternion.sqrLen = function(a) {
+        return quat.sqrLen(a._array);
+    };
+
+    /**
+     * @method
+     * @param  {qtek.math.Quaternion} a
+     * @return {number}
+     */
+    Quaternion.squaredLength = Quaternion.sqrLen;
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Matrix3}    m
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.fromMat3 = function(out, m) {
+        quat.fromMat3(out._array, m._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Vector3}    view
+     * @param  {qtek.math.Vector3}    right
+     * @param  {qtek.math.Vector3}    up
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.setAxes = function(out, view, right, up) {
+        quat.setAxes(out._array, view._array, right._array, up._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Quaternion} out
+     * @param  {qtek.math.Vector3}    a
+     * @param  {qtek.math.Vector3}    b
+     * @return {qtek.math.Quaternion}
+     */
+    Quaternion.rotationTo = function(out, a, b) {
+        quat.rotationTo(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    return Quaternion;
+});
+define('qtek-physics/shape/Compound',['require','../Shape','qtek/math/Vector3','qtek/math/Quaternion'],function(require) {
+
+    
+
+    var Shape = require('../Shape');
+    var Vector3 = require('qtek/math/Vector3');
+    var Quaternion = require('qtek/math/Quaternion');
+
+    var ChildShape = function(shape, position, rotation) {
+        this.shape = shape;
+        this.position = position || new Vector3();
+        this.rotation = rotation || new Quaternion();
+    }
+
+    var CompoundShape = Shape.derive({
+        
+        _dirty : false
+
+    }, function() {
+        this._children = [];
+    }, {
+        addChildShape : function(shape, position, rotation) {
+            this.removeChildShape(shape);
+            var childShape = new ChildShape(shape, position, rotation);
+            this._children.push(childShape);
+            this._dirty = true;
+
+            return childShape;
+        },
+
+        removeChildShape : function(shape) {
+            for (var i = 0; i < this._children.length; i++) {
+                if (this._children[i].shape === shape) {
+                    this._children.splice(i, 1);
+                    this._dirty = true;
+                    return;
+                }
+            }
+        },
+
+        getChildShape : function(shape) {
+            for (var i = 0; i < this._children.length; i++) {
+                if (this._children[i].shape === shape) {
+                    return this._children[i];
+                }
+            }
+        },
+
+        getChildShapeAt : function(i) {
+            return this._children[i];
+        }
+    });
+    
+    return CompoundShape;
+});
+define('qtek-physics/Pool',['require'],function (require) {
     
     function Pool() {
 
@@ -5794,6 +7252,12 @@ define('qtek/physics/Pool',['require'],function (require) {
     Pool.prototype.removeAt = function(idx) {
         this._data[idx] = null;
         this._empties.push(idx);
+    }
+
+    Pool.prototype.removeAll = function() {
+        this._data = [];
+        this._empties = [];
+        this._size = 0;
     }
 
     Pool.prototype.getAt = function(idx) {
@@ -5831,7 +7295,7 @@ define('qtek/physics/Pool',['require'],function (require) {
 });
 // Ammo.js adapter
 // https://github.com/kripken/ammo.js
-define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./AmmoEngineConfig.js','./AmmoEngineWorker.js','./shape/Box','./shape/Capsule','./shape/Cone','./shape/Cylinder','./shape/Sphere','./shape/StaticPlane','./shape/ConvexTriangleMesh','./shape/BvhTriangleMesh','./shape/ConvexHull','./Buffer','./Pool','./ContactPoint','qtek/math/Vector3'],function(require) {
+define('qtek-physics/Engine',['require','qtek/core/Base','qtek/core/util','./AmmoEngineConfig.js','./AmmoEngineWorker.js','./shape/Box','./shape/Capsule','./shape/Cone','./shape/Cylinder','./shape/Sphere','./shape/StaticPlane','./shape/ConvexTriangleMesh','./shape/BvhTriangleMesh','./shape/ConvexHull','./shape/Compound','./Buffer','./Pool','./ContactPoint','qtek/math/Vector3'],function(require) {
 
     
 
@@ -5857,6 +7321,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
     var ConvexTriangleMeshShape = require('./shape/ConvexTriangleMesh');
     var BvhTriangleMeshShape = require('./shape/BvhTriangleMesh');
     var ConvexHullShape = require('./shape/ConvexHull');
+    var CompoundShape = require('./shape/Compound');
     var QBuffer  = require('./Buffer');
     var QPool = require('./Pool');
     var ContactPoint = require('./ContactPoint');
@@ -5880,7 +7345,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
 
             _stepTime : 0,
 
-            _isWorkerInited : true,
+            _isWorkerInited : false,
             _isWorkerFree : true,
             _accumalatedTime : 0,
 
@@ -5898,15 +7363,16 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
             _rayTestBuffer : new QBuffer()
         }
 
-    }, function () {
-        this.init();
     }, {
 
         init : function() {
             var workerBlobUrl = window.URL.createObjectURL(workerBlob);
             this._engineWorker = new Worker(workerBlobUrl);
             // TODO more robust
-            var ammoUrl = util.relative2absolute(this.ammoUrl, window.location.href.split('/').slice(0, -1).join('/'));
+            var ammoUrl = this.ammoUrl;
+            if (ammoUrl.indexOf('http') != 0) {
+                ammoUrl = util.relative2absolute(this.ammoUrl, window.location.href.split('/').slice(0, -1).join('/'));
+            }
             this._engineWorker.postMessage({
                 __init__ : true,
                 ammoUrl : ammoUrl,
@@ -5917,7 +7383,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
 
             this._engineWorker.onmessage = function(e) {
                 if (e.data.__init__) {
-                    this._isWorkerInited = true;
+                    self._isWorkerInited = true;
                     return;
                 }
 
@@ -6014,7 +7480,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
         },
 
         removeCollider : function(collider) {
-            var idx = this._colliders.indexOf(collider);
+            var idx = this._colliders.getIndex(collider);
             if (idx >= 0) {
                 this._collidersToRemove.push(idx);
             }
@@ -6035,6 +7501,18 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
 
             var array = this._rayTestBuffer.toFloat32Array();
             this._engineWorker.postMessage(array.buffer, [array.buffer]);
+        },
+
+        dispose : function() {
+            this._colliders.removeAll();
+            this._callbacks.removeAll();
+            this._collidersToAdd = [];
+            this._collidersToRemove = [];
+            this._contacts = [];
+            this._engineWorker.terminate()
+            this._engineWorker = null;
+
+            this._isWorkerInited = false;
         },
 
         _rayTestCallback : function(buffer, offset, isClosest) {
@@ -6280,6 +7758,16 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
                         this._cmdBuffer.packArray(geo.attributes.position.value[i]);
                     }
                 }
+            } else if (shape instanceof CompoundShape) {
+                this._cmdBuffer.packScalar(config.SHAPE_COMPOUND);
+                this._cmdBuffer.packScalar(shape._children.length);
+                for (var i = 0; i < shape._children.length; i++) {
+                    var child = shape._children[i];
+                    this._cmdBuffer.packVector3(child.position);
+                    this._cmdBuffer.packVector4(child.rotation);
+                    // Always pack child
+                    this._packShape(child.shape, true);
+                }
             }
 
             if (shape.halfExtents) {
@@ -6398,7 +7886,7 @@ define('qtek/physics/Engine',['require','qtek/core/Base','qtek/core/util','./Amm
 
     return Engine;
 });
-define('qtek/physics/GhostObject',['require','qtek/core/Base'],function(require) {
+define('qtek-physics/GhostObject',['require','qtek/core/Base'],function(require) {
     
     
     
@@ -6406,12 +7894,18 @@ define('qtek/physics/GhostObject',['require','qtek/core/Base'],function(require)
 
     var GhostObject = Base.derive({
         shape : null
+    }, {
+        clone : function() {
+            return new GhostObject({
+                shape : this.shape
+            });
+        }
     });
 
     return GhostObject;
 });
 // Physics material description
-define('qtek/physics/Material',['require','qtek/core/Base'],function (require) {
+define('qtek-physics/Material',['require','qtek/core/Base'],function (require) {
     
     
     
@@ -6448,258 +7942,11 @@ define('qtek/physics/Material',['require','qtek/core/Base'],function (require) {
 
     return Material;
 });
-define('qtek/math/Quaternion',['require','glmatrix'],function(require) {
-
-    
-
-    var glMatrix = require("glmatrix");
-    var quat = glMatrix.quat;
-
-    var Quaternion = function(x, y, z, w) {
-
-        x = x || 0;
-        y = y || 0;
-        z = z || 0;
-        w = w === undefined ? 1 : w;
-
-        this._array = quat.fromValues(x, y, z, w);
-        // Dirty flag is used by the Node to determine
-        // if the matrix is updated to latest
-        this._dirty = true;
-    }
-
-    Quaternion.prototype = {
-
-        constructor : Quaternion,
-
-        get x() {
-            return this._array[0];
-        },
-
-        set x(value) {
-            this._array[0] = value;
-            this._dirty = true;
-        },
-
-        get y() {
-            this._array[1] = value;
-            this._dirty = true;
-        },
-
-        set y(value) {
-            return this._array[1];
-        },
-
-        get z() {
-            return this._array[2];
-        },
-
-        set z(value) {
-            this._array[2] = value;
-            this._dirty = true;
-        },
-
-        get w() {
-            return this._array[3];
-        },
-
-        set w(value) {
-            this._array[3] = value;
-            this._dirty = true;
-        },
-
-        add : function(b) {
-            quat.add( this._array, this._array, b._array );
-            this._dirty = true;
-            return this;
-        },
-
-        calculateW : function() {
-            quat.calculateW(this._array, this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        set : function(x, y, z, w) {
-            this._array[0] = x;
-            this._array[1] = y;
-            this._array[2] = z;
-            this._array[3] = w;
-            this._dirty = true;
-            return this;
-        },
-
-        setArray : function(arr) {
-            this._array[0] = arr[0];
-            this._array[1] = arr[1];
-            this._array[2] = arr[2];
-            this._array[3] = arr[3];
-
-            this._dirty = true;
-            return this;
-        },
-
-        clone : function() {
-            return new Quaternion( this.x, this.y, this.z, this.w );
-        },
-
-        /**
-         * Calculates the conjugate of a quat If the quaternion is normalized, 
-         * this function is faster than quat.inverse and produces the same result.
-         */
-        conjugate : function() {
-            quat.conjugate(this._array, this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        copy : function(b) {
-            quat.copy( this._array, b._array );
-            this._dirty = true;
-            return this;
-        },
-
-        dot : function(b) {
-            return quat.dot(this._array, b._array);
-        },
-
-        fromMat3 : function(m) {
-            quat.fromMat3(this._array, m._array);
-            this._dirty = true;
-            return this;
-        },
-
-        fromMat4 : (function() {
-            var mat3 = glMatrix.mat3;
-            var m3 = mat3.create();
-            return function(m) {
-                mat3.fromMat4(m3, m._array);
-                // Not like mat4, mat3 in glmatrix seems to be row-based
-                mat3.transpose(m3, m3);
-                quat.fromMat3(this._array, m3);
-                this._dirty = true;
-                return this;
-            }
-        })(),
-
-        identity : function() {
-            quat.identity(this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        invert : function() {
-            quat.invert(this._array, this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        len : function() {
-            return quat.len(this._array);
-        },
-
-        length : function() {
-            return quat.length(this._array);
-        },
-
-        lerp : function(a, b, t) {
-            quat.lerp(this._array, a._array, b._array, t);
-            this._dirty = true;
-            return this;
-        },
-
-        mul : function(b) {
-            quat.mul(this._array, this._array, b._array);
-            this._dirty = true;
-            return this;
-        },
-
-        mulLeft : function() {
-            quat.multiply(this._array, a._array, this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        multiply : function(b) {
-            quat.multiply(this._array, this._array, b._array);
-            this._dirty = true;
-            return this;
-        },
-
-        multiplyLeft : function(a) {
-            quat.multiply(this._array, a._array, this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        normalize : function() {
-            quat.normalize(this._array, this._array);
-            this._dirty = true;
-            return this;
-        },
-
-        rotateX : function(rad) {
-            quat.rotateX(this._array, this._array, rad); 
-            this._dirty = true;
-            return this;
-        },
-
-        rotateY : function(rad) {
-            quat.rotateY(this._array, this._array, rad);
-            this._dirty = true;
-            return this;
-        },
-
-        rotateZ : function(rad) {
-            quat.rotateZ(this._array, this._array, rad);
-            this._dirty = true;
-            return this;
-        },
-
-        rotationTo : function(a, b) {
-            quat.rotationTo(this._array, a._array, b._array);
-            this._dirty = true;
-            return this;
-        },
-
-        setAxisAngle : function(axis /*Vector3*/, rad) {
-            quat.setAxisAngle(this._array, axis._array, rad);
-            this._dirty = true;
-            return this;
-        },
-
-        slerp : function(a, b, t) {
-            quat.slerp(this._array, a._array, b._array, t);
-            this._dirty = true;
-            return this;
-        },
-
-        sqrLen : function() {
-            return quat.sqrLen(this._array);
-        },
-
-        squaredLength : function() {
-            return quat.squaredLength(this._array);
-        },
-        /**
-         * Set quaternion from euler angle
-         */
-        setFromEuler : function(v) {
-            
-        },
-
-        toString : function() {
-            return "[" + Array.prototype.join.call(this._array, ",") + "]";
-        }
-    }
-
-    return Quaternion;
-} );
 define('qtek/math/Matrix3',['require','glmatrix'],function(require) {
 
     
 
-    var glMatrix = require("glmatrix");
+    var glMatrix = require('glmatrix');
     var mat3 = glMatrix.mat3;
 
     function makeProperty(n) {
@@ -6712,85 +7959,385 @@ define('qtek/math/Matrix3',['require','glmatrix'],function(require) {
             get : function() {
                 return this._array[n];
             }
-        }
+        };
     }
 
+    /**
+     * @constructor
+     * @alias qtek.math.Matrix3
+     */
     var Matrix3 = function() {
 
+        /**
+         * Storage of Matrix3
+         * @type {Float32Array}
+         */
         this._array = mat3.create();
+
+        /**
+         * @type {boolean}
+         */
+        this._dirty = true;
     };
 
     Matrix3.prototype = {
 
         constructor : Matrix3,
 
+        /**
+         * Calculate the adjugate of self, in-place
+         * @return {qtek.math.Matrix3}
+         */
         adjoint : function() {
             mat3.adjoint(this._array, this._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Clone a new Matrix3
+         * @return {qtek.math.Matrix3}
+         */
         clone : function() {
             return (new Matrix3()).copy(this);
         },
+
+        /**
+         * Copy from b
+         * @param  {qtek.math.Matrix3} b
+         * @return {qtek.math.Matrix3}
+         */
         copy : function(b) {
             mat3.copy(this._array, b._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Calculate matrix determinant
+         * @return {number}
+         */
         determinant : function() {
             return mat3.determinant(this._array);
         },
+
+        /**
+         * Copy the values from Matrix2d a
+         * @param  {qtek.math.Matrix2d} a
+         * @return {qtek.math.Matrix3}
+         */
         fromMat2d : function(a) {
-            return mat3.fromMat2d(this._array, a._array);
+            mat3.fromMat2d(this._array, a._array);
+            this._dirty = true;
+            return this;
         },
+
+        /**
+         * Copies the upper-left 3x3 values of Matrix4
+         * @param  {qtek.math.Matrix4} a
+         * @return {qtek.math.Matrix3}
+         */
         fromMat4 : function(a) {
-            return mat3.fromMat4(this._array, a._array);
+            mat3.fromMat4(this._array, a._array);
+            this._dirty = true;
+            return this;
         },
+
+        /**
+         * Calculates a rotation matrix from the given quaternion
+         * @param  {qtek.math.Quaternion} q
+         * @return {qtek.math.Matrix3}
+         */
         fromQuat : function(q) {
             mat3.fromQuat(this._array, q._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Set to a identity matrix
+         * @return {qtek.math.Matrix3}
+         */
         identity : function() {
             mat3.identity(this._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Invert self
+         * @return {qtek.math.Matrix3}
+         */
         invert : function() {
             mat3.invert(this._array, this._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Alias for mutiply
+         * @param  {qtek.math.Matrix3} b
+         * @return {qtek.math.Matrix3}
+         */
         mul : function(b) {
             mat3.mul(this._array, this._array, b._array);
+            this._dirty = true;
             return this;
         },
-        mulLeft : function(b) {
-            mat3.mul(this._array, b._array, this._array);
+
+        /**
+         * Alias for multiplyLeft
+         * @param  {qtek.math.Matrix3} a
+         * @return {qtek.math.Matrix3}
+         */
+        mulLeft : function(a) {
+            mat3.mul(this._array, a._array, this._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Multiply self and b
+         * @param  {qtek.math.Matrix3} b
+         * @return {qtek.math.Matrix3}
+         */
         multiply : function(b) {
             mat3.multiply(this._array, this._array, b._array);
+            this._dirty = true;
             return this;
         },
-        multiplyLeft : function(b) {
-            mat3.multiply(this._array, b._array, this._array);
+
+        /**
+         * Multiply a and self, a is on the left
+         * @param  {qtek.math.Matrix3} a
+         * @return {qtek.math.Matrix3}
+         */
+        multiplyLeft : function(a) {
+            mat3.multiply(this._array, a._array, this._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Rotate self by a given radian
+         * @param  {number}   rad
+         * @return {qtek.math.Matrix3}
+         */
+        rotate : function(rad) {
+            mat3.rotate(this._array, this._array, rad);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Scale self by s
+         * @param  {qtek.math.Vector2}  s
+         * @return {qtek.math.Matrix3}
+         */
+        scale : function(v) {
+            mat3.scale(this._array, this._array, v._array);
+            this._dirty = true;
+            return this;
+        },
+
+        /**
+         * Translate self by v
+         * @param  {qtek.math.Vector2}  v
+         * @return {qtek.math.Matrix3}
+         */
+        translate : function(v) {
+            mat3.translate(this._array, this._array, v._array);
+            this._dirty = true;
             return this;
         },
         /**
          * Calculates a 3x3 normal matrix (transpose inverse) from the 4x4 matrix
+         * @param {qtek.math.Matrix4} a
          */
         normalFromMat4 : function(a) {
             mat3.normalFromMat4(this._array, a._array);
+            this._dirty = true;
             return this;
         },
+
+        /**
+         * Transpose self, in-place.
+         * @return {qtek.math.Matrix2}
+         */
         transpose : function() {
             mat3.transpose(this._array, this._array);
+            this._dirty = true;
             return this;
         },
         toString : function() {
-            return "[" + Array.prototype.join.call(this._array, ",") + "]";
+            return '[' + Array.prototype.join.call(this._array, ',') + ']';
         }
-    }
+    };
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.adjoint = function(out, a) {
+        mat3.adjoint(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.copy = function(out, a) {
+        mat3.copy(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} a
+     * @return {number}
+     */
+    Matrix3.determinant = function(a) {
+        return mat3.determinant(a._array);
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.identity = function(out) {
+        mat3.identity(out._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.invert = function(out, a) {
+        mat3.invert(out._array, a._array);
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @param  {qtek.math.Matrix3} b
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.mul = function(out, a, b) {
+        mat3.mul(out._array, a._array, b._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @method
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @param  {qtek.math.Matrix3} b
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.multiply = Matrix3.mul;
+    
+    /**
+     * @param  {qtek.math.Matrix3}  out
+     * @param  {qtek.math.Matrix2d} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.fromMat2d = function(out, a) {
+        mat3.fromMat2d(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix4} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.fromMat4 = function(out, a) {
+        mat3.fromMat4(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3}    out
+     * @param  {qtek.math.Quaternion} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.fromQuat = function(out, q) {
+        mat3.fromQuat(out._array, q._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix4} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.normalFromMat4 = function(out, a) {
+        mat3.normalFromMat4(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @param  {number}  rad
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.rotate = function(out, a, rad) {
+        mat3.rotate(out._array, a._array, rad);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @param  {qtek.math.Vector2} v
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.scale = function(out, a, v) {
+        mat3.scale(out._array, a._array, v._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.transpose = function(out, a) {
+        mat3.transpose(out._array, a._array);
+        out._dirty = true;
+        return out;
+    };
+
+    /**
+     * @param  {qtek.math.Matrix3} out
+     * @param  {qtek.math.Matrix3} a
+     * @param  {qtek.math.Vector2} v
+     * @return {qtek.math.Matrix3}
+     */
+    Matrix3.translate = function(out, a, v) {
+        mat3.translate(out._array, a._array, v._array);
+        out._dirty = true;
+        return out;
+    };
 
     return Matrix3;
 });
-define('qtek/physics/RigidBody',['require','qtek/core/Base','qtek/math/Vector3','qtek/math/Quaternion','glmatrix','qtek/math/Matrix3'],function(require) {
+define('qtek-physics/RigidBody',['require','qtek/core/Base','qtek/math/Vector3','qtek/math/Quaternion','glmatrix','qtek/math/Matrix3'],function(require) {
     
     
     
@@ -6881,6 +8428,16 @@ define('qtek/physics/RigidBody',['require','qtek/core/Base','qtek/math/Vector3',
         clearForces : function() {
             this.totalForce.set(0, 0, 0);
             this.totalTorque.set(0, 0, 0);
+        },
+
+        clone : function() {
+            var rigidBody = new RigidBody();
+            rigidBody.shape = this.shape;
+            rigidBody.linearFactor.copy(this.linearFactor);
+            rigidBody.angularFactor.copy(this.angularFactor);
+            rigidBody.massAndDamping.copy(this.massAndDamping);
+
+            return rigidBody;
         }
     });
 
@@ -6914,33 +8471,36 @@ define('qtek/physics/RigidBody',['require','qtek/core/Base','qtek/math/Vector3',
 
     return RigidBody;
 });
-define( 'qtek/physics/qtek-physics',['require','qtek/physics/Buffer','qtek/physics/Collider','qtek/physics/ContactPoint','qtek/physics/Engine','qtek/physics/GhostObject','qtek/physics/Material','qtek/physics/Pool','qtek/physics/RigidBody','qtek/physics/Shape','qtek/physics/shape/Box','qtek/physics/shape/BvhTriangleMesh','qtek/physics/shape/Capsule','qtek/physics/shape/Cone','qtek/physics/shape/ConvexHull','qtek/physics/shape/ConvexTriangleMesh','qtek/physics/shape/Cylinder','qtek/physics/shape/Sphere','qtek/physics/shape/StaticPlane'],function(require){
+define( 'qtek-physics/qtek-physics',['require','qtek-physics/Buffer','qtek-physics/Collider','qtek-physics/ContactPoint','qtek-physics/Engine','qtek-physics/GhostObject','qtek-physics/Material','qtek-physics/Pool','qtek-physics/RigidBody','qtek-physics/Shape','qtek-physics/shape/Box','qtek-physics/shape/BvhTriangleMesh','qtek-physics/shape/Capsule','qtek-physics/shape/Compound','qtek-physics/shape/Cone','qtek-physics/shape/ConvexHull','qtek-physics/shape/ConvexTriangleMesh','qtek-physics/shape/Cylinder','qtek-physics/shape/Sphere','qtek-physics/shape/StaticPlane'],function(require){
     
     var exportsObject = {
-	"Buffer": require('qtek/physics/Buffer'),
-	"Collider": require('qtek/physics/Collider'),
-	"ContactPoint": require('qtek/physics/ContactPoint'),
-	"Engine": require('qtek/physics/Engine'),
-	"GhostObject": require('qtek/physics/GhostObject'),
-	"Material": require('qtek/physics/Material'),
-	"Pool": require('qtek/physics/Pool'),
-	"RigidBody": require('qtek/physics/RigidBody'),
-	"Shape": require('qtek/physics/Shape'),
+	"Buffer": require('qtek-physics/Buffer'),
+	"Collider": require('qtek-physics/Collider'),
+	"ContactPoint": require('qtek-physics/ContactPoint'),
+	"Engine": require('qtek-physics/Engine'),
+	"GhostObject": require('qtek-physics/GhostObject'),
+	"Material": require('qtek-physics/Material'),
+	"Pool": require('qtek-physics/Pool'),
+	"RigidBody": require('qtek-physics/RigidBody'),
+	"Shape": require('qtek-physics/Shape'),
 	"shape": {
-		"Box": require('qtek/physics/shape/Box'),
-		"BvhTriangleMesh": require('qtek/physics/shape/BvhTriangleMesh'),
-		"Capsule": require('qtek/physics/shape/Capsule'),
-		"Cone": require('qtek/physics/shape/Cone'),
-		"ConvexHull": require('qtek/physics/shape/ConvexHull'),
-		"ConvexTriangleMesh": require('qtek/physics/shape/ConvexTriangleMesh'),
-		"Cylinder": require('qtek/physics/shape/Cylinder'),
-		"Sphere": require('qtek/physics/shape/Sphere'),
-		"StaticPlane": require('qtek/physics/shape/StaticPlane')
+		"Box": require('qtek-physics/shape/Box'),
+		"BvhTriangleMesh": require('qtek-physics/shape/BvhTriangleMesh'),
+		"Capsule": require('qtek-physics/shape/Capsule'),
+		"Compound": require('qtek-physics/shape/Compound'),
+		"Cone": require('qtek-physics/shape/Cone'),
+		"ConvexHull": require('qtek-physics/shape/ConvexHull'),
+		"ConvexTriangleMesh": require('qtek-physics/shape/ConvexTriangleMesh'),
+		"Cylinder": require('qtek-physics/shape/Cylinder'),
+		"Sphere": require('qtek-physics/shape/Sphere'),
+		"StaticPlane": require('qtek-physics/shape/StaticPlane')
 	}
 };
     
     return exportsObject;
 });
+define('qtek-physics', ['qtek-physics/qtek-physics'], function (main) { return main; });
+
 qtekPhysics = require('qtek/physics/qtek-physics');
 
 for(var name in qtekPhysics){

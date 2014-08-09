@@ -17,7 +17,8 @@
                 });
                 engine.init();
                 var renderer = new qtek.Renderer({
-                    canvas : document.getElementById('Main')
+                    canvas : document.getElementById('Main'),
+                    devicePixelRatio : 1.0
                 });
                 renderer.resize(window.innerWidth, window.innerHeight);
 
@@ -91,7 +92,7 @@
                     qtek.core.util.each(res.textures, function(texture) {
                         texture.flipY = false;
                     });
-                    for (var i = 0; i < 20; i++) {
+                    for (var i = 0; i < 200; i++) {
                         var newBarrel = barrelNode.clone();
                         newBarrel.position.set(Math.random() * 30 - 15, Math.random() * 10 + 5, Math.random() * 30 - 15);
                         scene.add(newBarrel);
@@ -173,7 +174,7 @@
                     var end = ray.origin.clone().scaleAndAdd(ray.direction, 1000);
                     engine.rayTest(start, end, function(collider, hitPoint, hitNormal) {
                         if (collider.collisionObject) {
-                            collider.collisionObject.applyImpulse(ray.direction.clone().scale(30), hitPoint.sub(collider.sceneNode.position));
+                            collider.collisionObject.applyImpulse(ray.direction.clone().scale(100), hitPoint.sub(collider.sceneNode.position));
                         }
                     });
                 }
