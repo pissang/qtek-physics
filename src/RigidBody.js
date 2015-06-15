@@ -5,7 +5,7 @@ define(function(require) {
     var Base = require('qtek/core/Base');
     var Vector3 = require('qtek/math/Vector3');
     var Quaternion = require('qtek/math/Quaternion');
-    var glMatrix = require('glmatrix');
+    var glMatrix = require('qtek/dep/glmatrix');
     var vec3 = glMatrix.vec3;
 
     var Matrix3 = require('qtek/math/Matrix3');

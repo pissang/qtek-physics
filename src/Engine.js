@@ -128,11 +128,20 @@ define(function(require) {
         },
 
         step : function(timeStep) {
+            var self = this;
             if (!this._isWorkerInited) {
+                setTimeout(function () {
+                    // Empty step
+                    self.trigger('afterstep');
+                });
                 return;
             }
             // Wait until the worker is free to use
             if (!this._isWorkerFree) {
+                setTimeout(function () {
+                    // Empty step
+                    self.trigger('afterstep');
+                });
                 this._accumalatedTime += timeStep;
                 return;
             } else {
